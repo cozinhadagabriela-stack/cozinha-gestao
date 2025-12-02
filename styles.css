@@ -105,6 +105,7 @@ button {
   font-family: inherit;
 }
 
+/* Botão principal (pode usar class="primary" se quiser) */
 .primary {
   background-color: #8b0000;
   color: #fff;
@@ -119,7 +120,7 @@ button {
   background-color: #a30000;
 }
 
-/* Tabs de navegação */
+/* TABS DE NAVEGAÇÃO – AQUI ESTÁ A MUDANÇA GRANDE */
 
 .nav-tabs {
   display: flex;
@@ -128,9 +129,10 @@ button {
   margin-bottom: 16px;
 }
 
+/* Cada aba vira um "botão-pílula" vermelho, bem visível */
 .nav-tabs button {
   padding: 8px 16px;
-  border-radius: 999px; /* formato de "pílula", mais fácil de clicar */
+  border-radius: 999px; /* pílula */
   border: 2px solid #8b0000;
   background-color: #ffffff;
   color: #8b0000;
@@ -160,14 +162,28 @@ button {
   outline-offset: 2px;
 }
 
+/* Aba ativa: fundo vermelho, texto branco */
 .nav-tabs button.active-tab {
   background-color: #8b0000;
   color: #ffffff;
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
 }
 
-.subsection {
-  margin-top: 8px;
+/* Se você usa a classe .tab em vez de só button, garante o estilo também */
+.tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid #8b0000;
+  background-color: #ffffff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tab.active-tab {
+  background-color: #8b0000;
+  color: #ffffff;
 }
 
 /* Mensagens */
