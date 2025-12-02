@@ -1,0 +1,290 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background-color: #f4f4f4;
+}
+
+header {
+  background-color: #8b0000;
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+#user-info {
+  font-size: 14px;
+}
+
+#btn-logout {
+  margin-left: 8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 13px;
+  display: none;
+}
+
+main {
+  padding: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.card {
+  background-color: white;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+.placeholder {
+  color: #666;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none;
+}
+
+.form-group {
+  margin-bottom: 10px;
+}
+
+label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+
+button.primary {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 4px;
+  background-color: #8b0000;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#login-error {
+  color: #b00020;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+#loading {
+  font-size: 14px;
+  color: #666;
+}
+
+.msg {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.msg.ok {
+  color: #2e7d32;
+}
+
+.msg.error {
+  color: #b00020;
+}
+
+.nav-tabs {
+  margin-bottom: 12px;
+}
+
+.nav-tabs button {
+  padding: 6px 10px;
+  margin-right: 6px;
+  border-radius: 4px;
+  border: 1px solid #8b0000;
+  background-color: #fff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.nav-tabs button.active-tab {
+  background-color: #8b0000;
+  color: #fff;
+}
+
+.subsection {
+  margin-top: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+th, td {
+  border-bottom: 1px solid #eee;
+  padding: 4px 6px;
+  text-align: left;
+}
+
+th {
+  background-color: #f9f9f9;
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  background-color: #f7f7f7;
+}
+
+.btn-small + .btn-small {
+  margin-left: 4px;
+}
+
+.btn-danger {
+  background-color: #b00020;
+  color: #fff;
+  border-color: #b00020;
+}
+
+.resumo-total {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.filtros-venda {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  background-color: #fafafa;
+  border: 1px solid #eee;
+}
+
+.filtros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.filtros-botoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-secundario {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #8b0000;
+  background-color: #fff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* KPIs cards */
+.kpi-container {
+  margin-top: 12px;
+}
+
+.kpi-container h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.kpi-card {
+  background-color: #fff7f7;
+  border: 1px solid #f0d0d0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.kpi-label {
+  display: block;
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.kpi-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: #8b0000;
+}
+
+/* Tabelas de detalhamento */
+.kpi-extra {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.kpi-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.kpi-extra-block strong {
+  font-size: 12px;
+}
+
+.kpi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.kpi-table th,
+.kpi-table td {
+  border-bottom: 1px solid #eee;
+  padding: 3px 4px;
+  text-align: left;
+}
+
+.kpi-table th {
+  background-color: #fdf2f2;
+}
