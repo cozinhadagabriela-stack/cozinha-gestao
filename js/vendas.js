@@ -671,34 +671,16 @@ saveSaleButton.addEventListener("click", async () => {
   try {
     const dataTimestamp = new Date(dataStr).getTime();
 
-    // 1) Verifica estoque antes de gravar (se módulo de estoque estiver ativo)
-    if (typeof obterSaldoEstoque === "function") {
-      for (const item of itensParaSalvar) {
-        const loteItem = item.lote || "";
-        const qtdNecessaria = Number(item.quantidade || 0);
-        if (qtdNecessaria <= 0) continue;
-
-        const saldoAtual = await obterSaldoEstoque(item.produtoId, loteItem);
-        if (saldoAtual < qtdNecessaria) {
-          const produto = produtosMap[item.produtoId] || {};
-          const nomeProduto = produto.descricao || "Produto";
-          saleMessage.textContent =
-            `Estoque insuficiente para ${nomeProduto} (lote ${loteItem || "sem lote"}). ` +
-            `Saldo atual: ${saldoAtual}, quantidade solicitada: ${qtdNecessaria}.`;
-          saleMessage.className = "msg error";
-          return;
-        }
-      }
-    }
-
-    // 2) Grava vendas (uma por item)
-    const promessas = itensParaSalvar.map(item => {
+    // Salva cada item e, se tiver lote com estoque, dá baixa
+    for (const item of itensParaSalvar) {
       const produto = produtosMap[item.produtoId] || {};
       const quantidade = Number(item.quantidade || 0);
       const valorUnitario = Number(item.valorUnitario || 0);
       const valorTotal = quantidade * valorUnitario;
+      const lote = item.lote || "";
 
-      return db.collection("vendas").add({
+      // 1) Salva a venda do item
+      await db.collection("vendas").add({
         usuarioId: user.uid,
         data: dataStr,
         dataTimestamp,
@@ -710,7 +692,7 @@ saveSaleButton.addEventListener("click", async () => {
         quantidade,
         valorUnitario,
         valorTotal,
-        lote: item.lote || "",
+        lote,
         numeroNota,
         serieNota,
         formaId,
@@ -718,24 +700,29 @@ saveSaleButton.addEventListener("click", async () => {
         pedidoChave,
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
       });
-    });
 
-    await Promise.all(promessas);
-
-    // 3) Atualiza estoque (saída) após salvar venda
-    if (typeof ajustarSaldoEstoque === "function") {
-      const promessasEstoque = itensParaSalvar.map(async (item) => {
-        const produto = produtosMap[item.produtoId] || {};
-        const qtd = Number(item.quantidade || 0);
-        if (qtd <= 0) return;
-        await ajustarSaldoEstoque(
-          item.produtoId,
-          item.lote || "",
-          produto.descricao || "Produto",
-          -qtd // saída => diminui estoque
-        );
-      });
-      await Promise.all(promessasEstoque);
+      // 2) Integração com estoque:
+      //    - se tiver lote preenchido
+      //    - e existir saldo (> 0) para esse produto+lote
+      //      => dá baixa na quantidade vendida
+      if (lote && typeof obterSaldoEstoque === "function" && typeof ajustarSaldoEstoque === "function") {
+        try {
+          const saldoAtual = await obterSaldoEstoque(item.produtoId, lote);
+          if (saldoAtual > 0) {
+            // delta negativo = saída
+            await ajustarSaldoEstoque(
+              item.produtoId,
+              lote,
+              produto.descricao || "",
+              -quantidade
+            );
+          }
+          // Se saldoAtual for 0, não faz nada: permite venda mesmo sem estoque
+        } catch (e) {
+          console.error("Erro ao atualizar estoque na venda:", e);
+          // Não bloqueia a venda; apenas registra o erro no console
+        }
+      }
     }
 
     saleMessage.textContent = "Venda salva com sucesso!";
@@ -758,9 +745,13 @@ saveSaleButton.addEventListener("click", async () => {
 
     await carregarUltimasVendas();
 
-    // Atualiza saldos de estoque na aba (se estiver disponível)
+    // Atualiza a tela de estoque, se a função existir
     if (typeof carregarEstoqueSaldos === "function") {
-      carregarEstoqueSaldos();
+      try {
+        await carregarEstoqueSaldos();
+      } catch (e) {
+        console.error("Erro ao atualizar saldos de estoque após venda:", e);
+      }
     }
   } catch (e) {
     console.error("Erro ao salvar venda:", e);
