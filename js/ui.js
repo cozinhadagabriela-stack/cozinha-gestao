@@ -12,12 +12,14 @@ const logoutButton = document.getElementById("btn-logout");
 // abas
 const tabVenda = document.getElementById("tab-venda");
 const tabExtrato = document.getElementById("tab-extrato");
+const tabDespesas = document.getElementById("tab-despesas");
 const tabClientes = document.getElementById("tab-clientes");
 const tabProdutos = document.getElementById("tab-produtos");
 const tabFormas = document.getElementById("tab-formas");
 
 const sectionVenda = document.getElementById("section-venda");
 const sectionExtrato = document.getElementById("section-extrato");
+const sectionDespesas = document.getElementById("section-despesas");
 const sectionClientes = document.getElementById("section-clientes");
 const sectionProdutos = document.getElementById("section-produtos");
 const sectionFormas = document.getElementById("section-formas");
@@ -88,6 +90,7 @@ function setActiveSection(section) {
   // esconde tudo
   sectionVenda.classList.add("hidden");
   sectionExtrato.classList.add("hidden");
+  sectionDespesas.classList.add("hidden");
   sectionClientes.classList.add("hidden");
   sectionProdutos.classList.add("hidden");
   sectionFormas.classList.add("hidden");
@@ -95,6 +98,7 @@ function setActiveSection(section) {
   // limpa abas
   tabVenda.classList.remove("active-tab");
   tabExtrato.classList.remove("active-tab");
+  tabDespesas.classList.remove("active-tab");
   tabClientes.classList.remove("active-tab");
   tabProdutos.classList.remove("active-tab");
   tabFormas.classList.remove("active-tab");
@@ -105,6 +109,21 @@ function setActiveSection(section) {
   } else if (section === "extrato") {
     sectionExtrato.classList.remove("hidden");
     tabExtrato.classList.add("active-tab");
+  } else if (section === "despesas") {
+    sectionDespesas.classList.remove("hidden");
+    tabDespesas.classList.add("active-tab");
+
+    // Ao entrar na aba de despesas, garante que fornecedores,
+    // formas de pagamento e despesas estejam atualizados.
+    if (typeof carregarFornecedores === "function") {
+      carregarFornecedores();
+    }
+    if (typeof preencherFormasPagamentoDespesas === "function") {
+      preencherFormasPagamentoDespesas();
+    }
+    if (typeof carregarDespesas === "function") {
+      carregarDespesas();
+    }
   } else if (section === "clientes") {
     sectionClientes.classList.remove("hidden");
     tabClientes.classList.add("active-tab");
@@ -129,10 +148,22 @@ function updateUI(user) {
       saleDateInput.value = hoje;
     }
 
+    // carrega dados principais
     carregarClientes();
     carregarProdutos();
     carregarFormasPagamento();
     carregarUltimasVendas();
+
+    // carrega dados da aba de despesas (se funções existirem)
+    if (typeof carregarFornecedores === "function") {
+      carregarFornecedores();
+    }
+    if (typeof preencherFormasPagamentoDespesas === "function") {
+      preencherFormasPagamentoDespesas();
+    }
+    if (typeof carregarDespesas === "function") {
+      carregarDespesas();
+    }
   } else {
     loginCard.classList.remove("hidden");
     appCard.classList.add("hidden");
@@ -144,6 +175,7 @@ function updateUI(user) {
 // ===== Abas =====
 tabVenda.addEventListener("click", () => setActiveSection("venda"));
 tabExtrato.addEventListener("click", () => setActiveSection("extrato"));
+tabDespesas.addEventListener("click", () => setActiveSection("despesas"));
 tabClientes.addEventListener("click", () => setActiveSection("clientes"));
 tabProdutos.addEventListener("click", () => setActiveSection("produtos"));
 tabFormas.addEventListener("click", () => setActiveSection("formas"));
