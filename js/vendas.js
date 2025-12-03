@@ -1,4 +1,32 @@
+// ====== CONTROLE DE ITENS DO PEDIDO (TELA DE VENDA) ======
+let itensPedido = [];
+
+// se não existir, cria o cache de vendas
+if (typeof ultimasVendasCache === "undefined") {
+  window.ultimasVendasCache = [];
+}
+
+const pedidoItensTbody = document.getElementById("pedido-itens-tbody");
+const btnAddItem = document.getElementById("btn-add-item");
+
+// ====== FUNÇÕES AUXILIARES (VENDA) ======
+
+// Atualiza o campo "Total do pedido (R$)"
 function atualizarTotal() {
+  if (!saleTotalInput) return;
+
+  // Se já há itens na tabela, soma todos
+  if (itensPedido.length > 0) {
+    const total = itensPedido.reduce((acc, item) => {
+      const qtd = Number(item.quantidade || 0);
+      const unit = Number(item.valorUnitario || 0);
+      return acc + (qtd > 0 && unit >= 0 ? qtd * unit : 0);
+    }, 0);
+    saleTotalInput.value = total > 0 ? total.toFixed(2) : "";
+    return;
+  }
+
+  // Sem itens: usa o que está digitado nos campos (prévia)
   const qtd = Number(saleQuantityInput.value || 0);
   const unit = Number(saleUnitPriceInput.value || 0);
   if (qtd > 0 && unit >= 0) {
@@ -7,6 +35,142 @@ function atualizarTotal() {
     saleTotalInput.value = "";
   }
 }
+
+// Renderiza a tabela de itens do pedido
+function renderizarItensPedido() {
+  if (!pedidoItensTbody) return;
+
+  if (!itensPedido || itensPedido.length === 0) {
+    pedidoItensTbody.innerHTML =
+      '<tr><td colspan="6">Nenhum item adicionado.</td></tr>';
+    atualizarTotal();
+    return;
+  }
+
+  pedidoItensTbody.innerHTML = "";
+  let totalPedido = 0;
+
+  itensPedido.forEach((item, index) => {
+    const tr = document.createElement("tr");
+
+    const tdProduto = document.createElement("td");
+    tdProduto.textContent = item.produtoDescricao || "";
+    tr.appendChild(tdProduto);
+
+    const tdLote = document.createElement("td");
+    tdLote.textContent = item.lote || "";
+    tr.appendChild(tdLote);
+
+    const tdQtd = document.createElement("td");
+    tdQtd.textContent =
+      item.quantidade != null ? item.quantidade : "";
+    tr.appendChild(tdQtd);
+
+    const tdValorUnit = document.createElement("td");
+    tdValorUnit.textContent =
+      item.valorUnitario != null
+        ? Number(item.valorUnitario).toFixed(2)
+        : "";
+    tr.appendChild(tdValorUnit);
+
+    const valorItem =
+      Number(item.quantidade || 0) * Number(item.valorUnitario || 0);
+    totalPedido += valorItem;
+
+    const tdTotal = document.createElement("td");
+    tdTotal.textContent = valorItem.toFixed(2);
+    tr.appendChild(tdTotal);
+
+    const tdAcoes = document.createElement("td");
+    const btnRemover = document.createElement("button");
+    btnRemover.textContent = "Remover";
+    btnRemover.className = "btn-small btn-danger";
+    btnRemover.addEventListener("click", () => {
+      itensPedido.splice(index, 1);
+      renderizarItensPedido();
+    });
+    tdAcoes.appendChild(btnRemover);
+    tr.appendChild(tdAcoes);
+
+    pedidoItensTbody.appendChild(tr);
+  });
+
+  saleTotalInput.value = totalPedido > 0 ? totalPedido.toFixed(2) : "";
+}
+
+// Limpa apenas os campos do item
+function limparCamposItem() {
+  if (saleProductSelect) saleProductSelect.value = "";
+  if (saleLoteInput) saleLoteInput.value = "";
+  if (saleQuantityInput) saleQuantityInput.value = "1";
+  if (saleUnitPriceInput) saleUnitPriceInput.value = "";
+  atualizarTotal();
+}
+
+// Quando mudar o produto, puxa o preço padrão
+saleProductSelect.addEventListener("change", () => {
+  const id = saleProductSelect.value;
+  if (id && produtosMap[id] && typeof produtosMap[id].precoUnitario === "number") {
+    saleUnitPriceInput.value = produtosMap[id].precoUnitario.toFixed(2);
+  }
+  atualizarTotal();
+});
+
+// Atualiza prévia do total enquanto digita
+saleQuantityInput.addEventListener("input", atualizarTotal);
+saleUnitPriceInput.addEventListener("input", atualizarTotal);
+
+// Botão "Adicionar item" (só cuida do item; não grava no banco ainda)
+if (btnAddItem) {
+  btnAddItem.addEventListener("click", () => {
+    if (saleMessage) {
+      saleMessage.textContent = "";
+      saleMessage.className = "msg";
+    }
+
+    const produtoId = saleProductSelect.value;
+    const quantidade = Number(saleQuantityInput.value || 0);
+    const valorUnitario = Number(saleUnitPriceInput.value || 0);
+    let lote = (saleLoteInput.value || "").trim();
+
+    // Validações básicas
+    if (!produtoId) {
+      saleMessage.textContent =
+        "Selecione um produto para adicionar ao pedido.";
+      saleMessage.className = "msg error";
+      return;
+    }
+
+    if (quantidade <= 0 || valorUnitario <= 0) {
+      saleMessage.textContent =
+        "Informe quantidade e valor unitário maiores que zero para adicionar o item.";
+      saleMessage.className = "msg error";
+      return;
+    }
+
+    // Limite de caracteres do lote (8)
+    if (lote.length > 8) {
+      lote = lote.slice(0, 8);
+      saleLoteInput.value = lote;
+    }
+
+    const produto = produtosMap[produtoId] || {};
+    const produtoDescricao = produto.descricao || "Produto";
+
+    itensPedido.push({
+      produtoId,
+      produtoDescricao,
+      lote,
+      quantidade,
+      valorUnitario
+    });
+
+    limparCamposItem();
+    renderizarItensPedido();
+  });
+}
+
+// ====== CARREGAR / EXTRATO / KPIs ======
 
 async function carregarUltimasVendas() {
   salesTbody.innerHTML = '<tr><td colspan="11">Carregando...</td></tr>';
@@ -131,6 +295,25 @@ function atualizarTabelasDetalhe(mapaProdutoQtd, mapaProdutoValor, mapaFormaValo
   }
 }
 
+// ====== FILTROS EM MEMÓRIA / EXTRATO ======
+
+function aplicarFiltrosEmMemoria() {
+  const start = filterStartInput.value;
+  const end = filterEndInput.value;
+  const clienteFiltro = filterClientSelect.value;
+  const produtoFiltro = filterProductSelect.value;
+  const formaFiltro = filterFormaSelect.value;
+
+  return ultimasVendasCache.filter(v => {
+    if (start && v.data && v.data < start) return false;
+    if (end && v.data && v.data > end) return false;
+    if (clienteFiltro && v.clienteId !== clienteFiltro) return false;
+    if (produtoFiltro && v.produtoId !== produtoFiltro) return false;
+    if (formaFiltro && v.formaId !== formaFiltro) return false;
+    return true;
+  });
+}
+
 function renderizarVendasFiltradas() {
   const vendasFiltradas = aplicarFiltrosEmMemoria();
 
@@ -145,7 +328,9 @@ function renderizarVendasFiltradas() {
 
   let totalValor = 0;
   let totalQtd = 0;
-  let totalVendas = 0;
+  let totalPedidos = 0;
+
+  const pedidosSet = new Set();
 
   const mapaClienteValor = {};
   const mapaProdutoQtd = {};
@@ -154,11 +339,26 @@ function renderizarVendasFiltradas() {
   const mapaCidadeValor = {};
 
   vendasFiltradas.forEach(v => {
-    totalVendas += 1;
     const valor = Number(v.valorTotal || 0);
     const qtd = Number(v.quantidade || 0);
     totalValor += valor;
     totalQtd += qtd;
+
+    // conta nº de pedidos (pedidoChave)
+    const chavePedido =
+      v.pedidoChave ||
+      [
+        v.data || "",
+        v.clienteId || "",
+        v.formaId || "",
+        v.numeroNota || "",
+        v.serieNota || ""
+      ].join("|");
+
+    if (!pedidosSet.has(chavePedido)) {
+      pedidosSet.add(chavePedido);
+      totalPedidos += 1;
+    }
 
     const clienteNome = v.clienteNome || "";
     if (!mapaClienteValor[clienteNome]) mapaClienteValor[clienteNome] = 0;
@@ -240,7 +440,7 @@ function renderizarVendasFiltradas() {
 
   kpiTotalVendas.textContent = `R$ ${totalValor.toFixed(2)}`;
   kpiQtdVendida.textContent = String(totalQtd);
-  kpiNumVendas.textContent = String(totalVendas);
+  kpiNumVendas.textContent = String(totalPedidos);
 
   let topCliente = "—";
   let topClienteValor = 0;
@@ -307,122 +507,6 @@ function csvValue(value) {
   return `"${str}"`;
 }
 
-function aplicarFiltrosEmMemoria() {
-  const start = filterStartInput.value;
-  const end = filterEndInput.value;
-  const clienteFiltro = filterClientSelect.value;
-  const produtoFiltro = filterProductSelect.value;
-  const formaFiltro = filterFormaSelect.value;
-
-  return ultimasVendasCache.filter(v => {
-    if (start && v.data && v.data < start) return false;
-    if (end && v.data && v.data > end) return false;
-    if (clienteFiltro && v.clienteId !== clienteFiltro) return false;
-    if (produtoFiltro && v.produtoId !== produtoFiltro) return false;
-    if (formaFiltro && v.formaId !== formaFiltro) return false;
-    return true;
-  });
-}
-
-// ===== Lógica da venda =====
-saleProductSelect.addEventListener("change", () => {
-  const id = saleProductSelect.value;
-  if (id && produtosMap[id] && typeof produtosMap[id].precoUnitario === "number") {
-    saleUnitPriceInput.value = produtosMap[id].precoUnitario.toFixed(2);
-  }
-  atualizarTotal();
-});
-
-saleQuantityInput.addEventListener("input", atualizarTotal);
-saleUnitPriceInput.addEventListener("input", atualizarTotal);
-
-saveSaleButton.addEventListener("click", async () => {
-  const user = auth.currentUser;
-  if (!user) {
-    saleMessage.textContent = "Você precisa estar logado para salvar.";
-    saleMessage.className = "msg error";
-    return;
-  }
-
-  const dataStr = saleDateInput.value;
-  const clienteId = saleClientSelect.value;
-  const produtoId = saleProductSelect.value;
-  const formaId = salePaymentSelect.value;
-  const quantidade = Number(saleQuantityInput.value || 0);
-  const valorUnitario = Number(saleUnitPriceInput.value || 0);
-  const valorTotal = Number(saleTotalInput.value || 0);
-
-  saleMessage.textContent = "";
-  saleMessage.className = "msg";
-
-  if (!dataStr || !clienteId || !produtoId || !formaId ||
-      quantidade <= 0 || valorUnitario <= 0 || valorTotal <= 0) {
-    saleMessage.textContent = "Preencha data, cliente, produto, forma, quantidade e valor unitário.";
-    saleMessage.className = "msg error";
-    return;
-  }
-
-  const cliente = clientesMap[clienteId] || {};
-  const produto = produtosMap[produtoId] || {};
-  const forma = formasMap[formaId] || {};
-
-  const lote = saleLoteInput.value.trim();
-  const numeroNota = saleNfNumberInput.value.trim();
-  const serieNota = saleNfSeriesInput.value.trim();
-
-  try {
-    const dataTimestamp = new Date(dataStr).getTime();
-
-    await db.collection("vendas").add({
-      usuarioId: user.uid,
-      data: dataStr,
-      dataTimestamp,
-      clienteId,
-      clienteNome: cliente.nome || "",
-      clienteCidade: cliente.cidade || "",
-      produtoId,
-      produtoDescricao: produto.descricao || "",
-      quantidade,
-      valorUnitario,
-      valorTotal,
-      lote,
-      numeroNota,
-      serieNota,
-      formaId,
-      formaDescricao: forma.descricao || "",
-      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    saleMessage.textContent = "Venda salva com sucesso!";
-    saleMessage.className = "msg ok";
-
-    saleQuantityInput.value = "1";
-    saleLoteInput.value = "";
-    saleNfNumberInput.value = "";
-    saleNfSeriesInput.value = "";
-    atualizarTotal();
-    await carregarUltimasVendas();
-  } catch (e) {
-    console.error("Erro ao salvar venda:", e);
-    saleMessage.textContent = "Erro ao salvar venda.";
-    saleMessage.className = "msg error";
-  }
-});
-
-// ===== Filtros de vendas =====
-applyFilterButton.addEventListener("click", () => {
-  renderizarVendasFiltradas();
-});
-
-clearFilterButton.addEventListener("click", () => {
-  filterStartInput.value = "";
-  filterEndInput.value = "";
-  filterClientSelect.value = "";
-  filterProductSelect.value = "";
-  filterFormaSelect.value = "";
-  renderizarVendasFiltradas();
-});
-
 // ===== Exportar CSV (vendas filtradas) =====
 exportCsvButton.addEventListener("click", () => {
   const filtradas = aplicarFiltrosEmMemoria();
@@ -447,7 +531,8 @@ exportCsvButton.addEventListener("click", () => {
     "ValorTotal",
     "Lote",
     "NumeroNota",
-    "SerieNota"
+    "SerieNota",
+    "PedidoChave"
   ].join(";");
   linhas.push(cabecalho);
 
@@ -465,7 +550,8 @@ exportCsvButton.addEventListener("click", () => {
       csvValue(v.valorTotal != null ? v.valorTotal.toFixed(2) : ""),
       csvValue(v.lote || ""),
       csvValue(v.numeroNota || ""),
-      csvValue(v.serieNota || "")
+      csvValue(v.serieNota || ""),
+      csvValue(v.pedidoChave || "")
     ].join(";");
     linhas.push(linha);
   });
@@ -477,7 +563,6 @@ exportCsvButton.addEventListener("click", () => {
   const fileName = `vendas_filtradas_${hoje}.csv`;
 
   if (navigator.msSaveBlob) {
-    // IE 10+
     navigator.msSaveBlob(blob, fileName);
   } else {
     const link = document.createElement("a");
@@ -490,5 +575,154 @@ exportCsvButton.addEventListener("click", () => {
       link.click();
       document.body.removeChild(link);
     }
+  }
+});
+
+// ===== Filtros de vendas =====
+applyFilterButton.addEventListener("click", () => {
+  renderizarVendasFiltradas();
+});
+
+clearFilterButton.addEventListener("click", () => {
+  filterStartInput.value = "";
+  filterEndInput.value = "";
+  filterClientSelect.value = "";
+  filterProductSelect.value = "";
+  filterFormaSelect.value = "";
+  renderizarVendasFiltradas();
+});
+
+// ===== Salvar venda (grava TODOS os itens do pedido) =====
+saveSaleButton.addEventListener("click", async () => {
+  const user = auth.currentUser;
+  if (!user) {
+    saleMessage.textContent = "Você precisa estar logado para salvar.";
+    saleMessage.className = "msg error";
+    return;
+  }
+
+  const dataStr = saleDateInput.value;
+  const clienteId = saleClientSelect.value;
+  const formaId = salePaymentSelect.value;
+
+  let numeroNota = (saleNfNumberInput.value || "").trim();
+  let serieNota = (saleNfSeriesInput.value || "").trim();
+
+  // Limites de tamanho (igual você tinha pedido antes)
+  if (numeroNota.length > 10) numeroNota = numeroNota.slice(0, 10);
+  if (serieNota.length > 5) serieNota = serieNota.slice(0, 5);
+  saleNfNumberInput.value = numeroNota;
+  saleNfSeriesInput.value = serieNota;
+
+  saleMessage.textContent = "";
+  saleMessage.className = "msg";
+
+  if (!dataStr || !clienteId || !formaId) {
+    saleMessage.textContent =
+      "Informe data, cliente e forma de pagamento.";
+    saleMessage.className = "msg error";
+    return;
+  }
+
+  // Garante pelo menos um item: se não tiver na lista, tenta pegar o que está nos campos
+  let itensParaSalvar = [...itensPedido];
+
+  if (itensParaSalvar.length === 0) {
+    const produtoId = saleProductSelect.value;
+    const quantidade = Number(saleQuantityInput.value || 0);
+    const valorUnitario = Number(saleUnitPriceInput.value || 0);
+    let lote = (saleLoteInput.value || "").trim();
+
+    if (produtoId && quantidade > 0 && valorUnitario > 0) {
+      if (lote.length > 8) {
+        lote = lote.slice(0, 8);
+        saleLoteInput.value = lote;
+      }
+
+      const produto = produtosMap[produtoId] || {};
+      itensParaSalvar.push({
+        produtoId,
+        produtoDescricao: produto.descricao || "Produto",
+        lote,
+        quantidade,
+        valorUnitario
+      });
+    }
+  }
+
+  if (itensParaSalvar.length === 0) {
+    saleMessage.textContent =
+      "Adicione pelo menos um item ao pedido antes de salvar.";
+    saleMessage.className = "msg error";
+    return;
+  }
+
+  const cliente = clientesMap[clienteId] || {};
+  const forma = formasMap[formaId] || {};
+
+  const pedidoChave = [
+    dataStr || "",
+    clienteId || "",
+    formaId || "",
+    numeroNota || "",
+    serieNota || ""
+  ].join("|");
+
+  try {
+    const dataTimestamp = new Date(dataStr).getTime();
+
+    const promessas = itensParaSalvar.map(item => {
+      const produto = produtosMap[item.produtoId] || {};
+      const quantidade = Number(item.quantidade || 0);
+      const valorUnitario = Number(item.valorUnitario || 0);
+      const valorTotal = quantidade * valorUnitario;
+
+      return db.collection("vendas").add({
+        usuarioId: user.uid,
+        data: dataStr,
+        dataTimestamp,
+        clienteId,
+        clienteNome: cliente.nome || "",
+        clienteCidade: cliente.cidade || "",
+        produtoId: item.produtoId,
+        produtoDescricao: produto.descricao || "",
+        quantidade,
+        valorUnitario,
+        valorTotal,
+        lote: item.lote || "",
+        numeroNota,
+        serieNota,
+        formaId,
+        formaDescricao: forma.descricao || "",
+        pedidoChave,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+
+    await Promise.all(promessas);
+
+    saleMessage.textContent = "Venda salva com sucesso!";
+    saleMessage.className = "msg ok";
+
+    // Limpa tudo para próximo pedido
+    itensPedido = [];
+    renderizarItensPedido();
+
+    saleDateInput.value = "";
+    saleClientSelect.value = "";
+    salePaymentSelect.value = "";
+    saleNfNumberInput.value = "";
+    saleNfSeriesInput.value = "";
+    saleProductSelect.value = "";
+    saleLoteInput.value = "";
+    saleQuantityInput.value = "1";
+    saleUnitPriceInput.value = "";
+    saleTotalInput.value = "";
+
+    await carregarUltimasVendas();
+  } catch (e) {
+    console.error("Erro ao salvar venda:", e);
+    saleMessage.textContent = "Erro ao salvar venda.";
+    saleMessage.className = "msg error";
   }
 });
