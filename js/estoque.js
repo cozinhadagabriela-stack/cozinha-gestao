@@ -6,6 +6,8 @@ let estoqueSaldosCache = [];
 // Referências de estoque
 const estProdutoSelect   = document.getElementById("est-produto");
 const estLoteInput       = document.getElementById("est-lote");
+const estValidadeInput   = document.getElementById("est-validade");
+const estCodBarrasInput  = document.getElementById("est-cod-barras");
 const estQuantidadeInput = document.getElementById("est-quantidade");
 const estTipoSelect      = document.getElementById("est-tipo");
 const estDataInput       = document.getElementById("est-data");
@@ -45,12 +47,20 @@ async function obterSaldoEstoque(produtoId, lote) {
   return Number(dados.quantidade || 0);
 }
 
-async function ajustarSaldoEstoque(produtoId, lote, produtoDescricao, deltaQuantidade) {
+async function ajustarSaldoEstoque(
+  produtoId,
+  lote,
+  produtoDescricao,
+  deltaQuantidade,
+  dataValidade,
+  codigoBarras
+) {
   const docId = `${produtoId}__${lote || "SEMLOTE"}`;
   const ref = db.collection("estoque").doc(docId);
 
   const snap = await ref.get();
-  const atual = snap.exists ? Number(snap.data().quantidade || 0) : 0;
+  const dadosAtuais = snap.exists ? snap.data() : {};
+  const atual = snap.exists ? Number(dadosAtuais.quantidade || 0) : 0;
   const novo  = atual + deltaQuantidade;
 
   // Se zerar ou ficar negativo, remove o documento -> some da listagem
@@ -61,12 +71,18 @@ async function ajustarSaldoEstoque(produtoId, lote, produtoDescricao, deltaQuant
     return;
   }
 
-  // Caso contrário, atualiza / cria com o novo saldo
+  // Se não vier validade/código novos, mantém os antigos
+  const novaValidade = dataValidade || dadosAtuais.dataValidade || "";
+  const novoCodigo   = codigoBarras || dadosAtuais.codigoBarras || "";
+
+  // Atualiza / cria com o novo saldo
   await ref.set(
     {
       produtoId,
       produtoDescricao: produtoDescricao || "",
       lote: lote || "",
+      dataValidade: novaValidade,
+      codigoBarras: novoCodigo,
       quantidade: novo,
       atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
     },
@@ -86,7 +102,7 @@ async function carregarEstoqueSaldos() {
   if (!estoqueSaldosTbody || !db) return;
 
   estoqueSaldosTbody.innerHTML =
-    '<tr><td colspan="3">Carregando...</td></tr>';
+    '<tr><td colspan="5">Carregando...</td></tr>';
   estoqueSaldosCache = [];
 
   try {
@@ -96,7 +112,7 @@ async function carregarEstoqueSaldos() {
 
     if (snap.empty) {
       estoqueSaldosTbody.innerHTML =
-        '<tr><td colspan="3">Nenhum dado de estoque.</td></tr>';
+        '<tr><td colspan="5">Nenhum dado de estoque.</td></tr>';
       return;
     }
 
@@ -106,8 +122,7 @@ async function carregarEstoqueSaldos() {
       const d = doc.data();
       const qtd = Number(d.quantidade || 0);
 
-      // Se por algum motivo ainda existir registro com 0 ou negativo,
-      // não mostra na tabela
+      // Se ainda existir registro com 0 ou negativo, não mostra
       if (qtd <= 0) {
         return;
       }
@@ -116,6 +131,8 @@ async function carregarEstoqueSaldos() {
 
       const tr = document.createElement("tr");
 
+      // IMPORTANTE: mesma ordem do <thead>:
+      // Produto | Lote | Validade | Código de barras | Quantidade
       const tdProd = document.createElement("td");
       tdProd.textContent = d.produtoDescricao || "";
       tr.appendChild(tdProd);
@@ -123,6 +140,14 @@ async function carregarEstoqueSaldos() {
       const tdLote = document.createElement("td");
       tdLote.textContent = d.lote || "";
       tr.appendChild(tdLote);
+
+      const tdVal = document.createElement("td");
+      tdVal.textContent = d.dataValidade || "";
+      tr.appendChild(tdVal);
+
+      const tdCod = document.createElement("td");
+      tdCod.textContent = d.codigoBarras || "";
+      tr.appendChild(tdCod);
 
       const tdQtd = document.createElement("td");
       tdQtd.textContent = qtd.toString();
@@ -134,12 +159,12 @@ async function carregarEstoqueSaldos() {
     // Se depois de filtrar não sobrou nada, mostra mensagem
     if (!estoqueSaldosTbody.hasChildNodes()) {
       estoqueSaldosTbody.innerHTML =
-        '<tr><td colspan="3">Nenhum dado de estoque.</td></tr>';
+        '<tr><td colspan="5">Nenhum dado de estoque.</td></tr>';
     }
   } catch (e) {
     console.error("Erro ao carregar saldos de estoque:", e);
     estoqueSaldosTbody.innerHTML =
-      '<tr><td colspan="3">Erro ao carregar saldos.</td></tr>';
+      '<tr><td colspan="5">Erro ao carregar saldos.</td></tr>';
   }
 }
 
@@ -160,11 +185,13 @@ async function salvarMovimentoEstoqueManual() {
     return;
   }
 
-  const produtoId  = estProdutoSelect.value;
-  let lote         = (estLoteInput?.value || "").trim();
-  const quantidade = Number(estQuantidadeInput?.value || 0);
-  const tipo       = estTipoSelect?.value || "ENTRADA";
-  let dataStr      = estDataInput?.value || "";
+  const produtoId    = estProdutoSelect.value;
+  let lote           = (estLoteInput?.value || "").trim();
+  const dataValidade = estValidadeInput?.value || "";
+  const codigoBarras = (estCodBarrasInput?.value || "").trim();
+  const quantidade   = Number(estQuantidadeInput?.value || 0);
+  const tipo         = estTipoSelect?.value || "ENTRADA";
+  let dataStr        = estDataInput?.value || "";
 
   if (!dataStr) {
     dataStr = new Date().toISOString().substring(0, 10);
@@ -195,13 +222,10 @@ async function salvarMovimentoEstoqueManual() {
   const produtoDescricao = produto.descricao || "Produto";
   const dataTimestamp = new Date(dataStr).getTime();
 
-  // Define o sinal do movimento
+  // Define o sinal do movimento (agora só ENTRADA ou SAIDA)
   let delta = quantidade;
-  if (tipo === "SAIDA" || tipo === "AJUSTE_NEGATIVO") {
+  if (tipo === "SAIDA") {
     delta = -quantidade;
-  } else {
-    // ENTRADA ou AJUSTE_POSITIVO
-    delta = quantidade;
   }
 
   // Para movimentos negativos, valida se não vai ficar negativo
@@ -229,14 +253,23 @@ async function salvarMovimentoEstoqueManual() {
 
   try {
     // Ajusta saldo principal (e apaga doc se zerar)
-    await ajustarSaldoEstoque(produtoId, lote, produtoDescricao, delta);
+    await ajustarSaldoEstoque(
+      produtoId,
+      lote,
+      produtoDescricao,
+      delta,
+      dataValidade,
+      codigoBarras
+    );
 
-    // (Opcional) registrar log de movimento em uma coleção
+    // (Opcional) registrar log de movimento em uma coleção separada
     // await db.collection("estoque_movimentos").add({
     //   usuarioId: user.uid,
     //   produtoId,
     //   produtoDescricao,
     //   lote,
+    //   dataValidade,
+    //   codigoBarras,
     //   quantidade,
     //   tipo,
     //   data: dataStr,
@@ -252,6 +285,8 @@ async function salvarMovimentoEstoqueManual() {
     // Limpa campos básicos
     estProdutoSelect.value = "";
     if (estLoteInput) estLoteInput.value = "";
+    if (estValidadeInput) estValidadeInput.value = "";
+    if (estCodBarrasInput) estCodBarrasInput.value = "";
     if (estQuantidadeInput) estQuantidadeInput.value = "1";
 
     await carregarEstoqueSaldos();
