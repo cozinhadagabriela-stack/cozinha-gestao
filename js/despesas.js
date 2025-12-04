@@ -10,7 +10,7 @@ const btnSaveFornecedor    = document.getElementById("btn-save-fornecedor");
 const fornMessage          = document.getElementById("forn-message");
 const fornecedoresTbody    = document.getElementById("fornecedores-tbody");
 
-// Referências da parte de despesas
+// Referências da parte de despesas (lançamento)
 const despFornecedorSelect = document.getElementById("desp-fornecedor");
 const despQtdInput         = document.getElementById("desp-quantidade");
 const despDescInput        = document.getElementById("desp-descricao");
@@ -23,9 +23,25 @@ const btnSaveDespesa       = document.getElementById("btn-save-despesa");
 const despMessage          = document.getElementById("desp-message");
 const despesasTbody        = document.getElementById("despesas-tbody");
 
+// Referências da parte de filtros
+const despFilterStartInput       = document.getElementById("desp-filter-start");
+const despFilterEndInput         = document.getElementById("desp-filter-end");
+const despFilterFornecedorSelect = document.getElementById("desp-filter-fornecedor");
+const despFilterDescricaoInput   = document.getElementById("desp-filter-descricao");
+const despFilterMarcaInput       = document.getElementById("desp-filter-marca");
+const btnDespApplyFilters        = document.getElementById("btn-desp-apply-filters");
+const btnDespClearFilters        = document.getElementById("btn-desp-clear-filters");
+const despesasTotalLabel         = document.getElementById("despesas-total");
+
 // ----------------------
-// Util: atualizar total da despesa (qtd x valor unitário)
+// Utils
 // ----------------------
+function formatarMoedaBR(valor) {
+  const num = Number(valor || 0);
+  return "R$ " + num.toFixed(2).replace(".", ",");
+}
+
+// Atualizar total da despesa (qtd x valor unit)
 function atualizarTotalDespesa() {
   if (!despValorTotalInput) return;
   const qtd  = Number(despQtdInput?.value || 0);
@@ -60,6 +76,7 @@ async function carregarFornecedores() {
     fornecedoresTbody.innerHTML = "";
 
     let optionsHtml = '<option value="">Selecione um fornecedor</option>';
+    let filterOptionsHtml = '<option value="">Todos os fornecedores</option>';
 
     if (snap.empty) {
       fornecedoresTbody.innerHTML =
@@ -73,6 +90,7 @@ async function carregarFornecedores() {
         const nome = dados.nome || "Fornecedor";
 
         optionsHtml += `<option value="${id}">${nome}</option>`;
+        filterOptionsHtml += `<option value="${id}">${nome}</option>`;
 
         const tr = document.createElement("tr");
 
@@ -94,6 +112,9 @@ async function carregarFornecedores() {
 
     if (despFornecedorSelect) {
       despFornecedorSelect.innerHTML = optionsHtml;
+    }
+    if (despFilterFornecedorSelect) {
+      despFilterFornecedorSelect.innerHTML = filterOptionsHtml;
     }
   } catch (e) {
     console.error("Erro ao carregar fornecedores:", e);
@@ -159,7 +180,6 @@ if (btnSaveFornecedor) {
 
 // ----------------------
 // Formas de pagamento no select de despesas
-// Usa o mesmo formasMap já usado nas vendas
 // ----------------------
 function preencherFormasPagamentoDespesas() {
   if (!despFormaSelect) return;
@@ -178,7 +198,7 @@ function preencherFormasPagamentoDespesas() {
 }
 
 // ----------------------
-// Despesas
+// Despesas - carregar lista
 // ----------------------
 async function carregarDespesas() {
   if (!despesasTbody || !db) return;
@@ -188,43 +208,70 @@ async function carregarDespesas() {
   despesasCache = [];
 
   try {
-    const snap = await db
+    let query = db
       .collection("despesas")
       .orderBy("dataPagamentoTimestamp", "desc")
-      .limit(100)
-      .get();
+      .limit(500);
+
+    const snap = await query.get();
 
     if (snap.empty) {
       despesasTbody.innerHTML =
         '<tr><td colspan="9">Nenhuma despesa lançada.</td></tr>';
+      if (despesasTotalLabel) {
+        despesasTotalLabel.textContent = formatarMoedaBR(0);
+      }
       return;
     }
 
     snap.forEach((doc) => {
       const d = doc.data();
-      despesasCache.push({ id: doc.id, ...d });
+      let ts = d.dataPagamentoTimestamp;
+
+      if (!ts && d.dataPagamento) {
+        const parsed = new Date(d.dataPagamento);
+        ts = isNaN(parsed.getTime()) ? null : parsed.getTime();
+      }
+
+      despesasCache.push({
+        id: doc.id,
+        ...d,
+        dataPagamentoTimestamp: ts || null,
+      });
     });
 
-    renderizarDespesas();
+    renderizarDespesas(despesasCache);
   } catch (e) {
     console.error("Erro ao carregar despesas:", e);
     despesasTbody.innerHTML =
       '<tr><td colspan="9">Erro ao carregar despesas.</td></tr>';
+    if (despesasTotalLabel) {
+      despesasTotalLabel.textContent = formatarMoedaBR(0);
+    }
   }
 }
 
-function renderizarDespesas() {
+// ----------------------
+// Despesas - renderizar tabela
+// ----------------------
+function renderizarDespesas(lista) {
   if (!despesasTbody) return;
 
-  if (!despesasCache || despesasCache.length === 0) {
+  const dados = Array.isArray(lista) ? lista : despesasCache;
+
+  if (!dados || dados.length === 0) {
     despesasTbody.innerHTML =
       '<tr><td colspan="9">Nenhuma despesa lançada.</td></tr>';
+    if (despesasTotalLabel) {
+      despesasTotalLabel.textContent = formatarMoedaBR(0);
+    }
     return;
   }
 
   despesasTbody.innerHTML = "";
+  let totalFiltrado = 0;
 
-  despesasCache.forEach((d) => {
+  dados.forEach((d) => {
     const tr = document.createElement("tr");
 
     const tdData = document.createElement("td");
@@ -256,11 +303,13 @@ function renderizarDespesas() {
     tr.appendChild(tdVUnit);
 
     const tdVTotal = document.createElement("td");
+    const vTotalNum =
+      d.valorTotal != null ? Number(d.valorTotal) : 0;
     tdVTotal.textContent =
-      d.valorTotal != null
-        ? Number(d.valorTotal).toFixed(2)
-        : "";
+      vTotalNum > 0 ? vTotalNum.toFixed(2) : "";
     tr.appendChild(tdVTotal);
+
+    totalFiltrado += vTotalNum;
 
     const tdForma = document.createElement("td");
     tdForma.textContent = d.formaDescricao || "";
@@ -276,8 +325,98 @@ function renderizarDespesas() {
 
     despesasTbody.appendChild(tr);
   });
+
+  if (despesasTotalLabel) {
+    despesasTotalLabel.textContent = formatarMoedaBR(totalFiltrado);
+  }
 }
 
+// ----------------------
+// Filtros de despesas
+// ----------------------
+function aplicarFiltrosDespesas() {
+  if (!despesasCache || despesasCache.length === 0) {
+    renderizarDespesas([]);
+    return;
+  }
+
+  let filtradas = [...despesasCache];
+
+  // Datas
+  const start = despFilterStartInput?.value || "";
+  const end   = despFilterEndInput?.value || "";
+
+  if (start) {
+    const dStart = new Date(start);
+    dStart.setHours(0, 0, 0, 0);
+    const tsStart = dStart.getTime();
+
+    filtradas = filtradas.filter((d) => {
+      const ts = d.dataPagamentoTimestamp || 0;
+      return ts >= tsStart;
+    });
+  }
+
+  if (end) {
+    const dEnd = new Date(end);
+    dEnd.setHours(23, 59, 59, 999);
+    const tsEnd = dEnd.getTime();
+
+    filtradas = filtradas.filter((d) => {
+      const ts = d.dataPagamentoTimestamp || 0;
+      return ts <= tsEnd;
+    });
+  }
+
+  // Fornecedor
+  const fornecedorFiltro = despFilterFornecedorSelect?.value || "";
+  if (fornecedorFiltro) {
+    filtradas = filtradas.filter((d) => d.fornecedorId === fornecedorFiltro);
+  }
+
+  // Descrição (contém)
+  const descFiltro = (despFilterDescricaoInput?.value || "")
+    .trim()
+    .toLowerCase();
+  if (descFiltro) {
+    filtradas = filtradas.filter((d) =>
+      (d.descricaoItem || "").toLowerCase().includes(descFiltro)
+    );
+  }
+
+  // Marca (contém)
+  const marcaFiltro = (despFilterMarcaInput?.value || "")
+    .trim()
+    .toLowerCase();
+  if (marcaFiltro) {
+    filtradas = filtradas.filter((d) =>
+      (d.marca || "").toLowerCase().includes(marcaFiltro)
+    );
+  }
+
+  renderizarDespesas(filtradas);
+}
+
+function limparFiltrosDespesas() {
+  if (despFilterStartInput) despFilterStartInput.value = "";
+  if (despFilterEndInput) despFilterEndInput.value = "";
+  if (despFilterFornecedorSelect) despFilterFornecedorSelect.value = "";
+  if (despFilterDescricaoInput) despFilterDescricaoInput.value = "";
+  if (despFilterMarcaInput) despFilterMarcaInput.value = "";
+
+  renderizarDespesas(despesasCache);
+}
+
+if (btnDespApplyFilters) {
+  btnDespApplyFilters.addEventListener("click", aplicarFiltrosDespesas);
+}
+if (btnDespClearFilters) {
+  btnDespClearFilters.addEventListener("click", limparFiltrosDespesas);
+}
+
+// ----------------------
+// Salvar / excluir despesas
+// ----------------------
 async function salvarDespesa() {
   if (!despFornecedorSelect || !db) return;
 
