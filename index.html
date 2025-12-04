@@ -500,7 +500,62 @@
             Salvar despesa
           </button>
           <p id="desp-message" class="msg"></p>
+        </section>
 
+        <!-- Filtros de despesas -->
+        <section class="subsection">
+          <h3>Filtros de despesas</h3>
+          <div class="filtros-container">
+            <div class="filtros-grid">
+              <div class="form-group">
+                <label for="desp-filter-start">Data inicial</label>
+                <input type="date" id="desp-filter-start" />
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-end">Data final</label>
+                <input type="date" id="desp-filter-end" />
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-fornecedor">Fornecedor</label>
+                <select id="desp-filter-fornecedor">
+                  <option value="">Todos os fornecedores</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-descricao">Descrição</label>
+                <input
+                  type="text"
+                  id="desp-filter-descricao"
+                  placeholder="Buscar por descrição"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-marca">Marca</label>
+                <input
+                  type="text"
+                  id="desp-filter-marca"
+                  placeholder="Buscar por marca"
+                />
+              </div>
+            </div>
+
+            <div class="filtros-botoes">
+              <button id="btn-desp-apply-filters" class="btn-secundario">
+                Aplicar filtros
+              </button>
+              <button id="btn-desp-clear-filters" class="btn-secundario">
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Lista de despesas -->
+        <section class="subsection">
           <div class="table-wrapper">
             <table>
               <thead>
@@ -521,6 +576,9 @@
               </tbody>
             </table>
           </div>
+          <p class="totais-label">
+            Total filtrado: <span id="despesas-total">R$ 0,00</span>
+          </p>
         </section>
       </div>
 
