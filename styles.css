@@ -1,0 +1,420 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background-color: #f4f4f4;
+}
+
+header {
+  background-color: #8b0000;
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+#user-info {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#user-email {
+  font-weight: bold;
+}
+
+#btn-logout {
+  background-color: #ffffff;
+  color: #8b0000;
+  border: 1px solid #fff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#btn-logout:hover {
+  background-color: #ffd6d6;
+}
+
+main {
+  padding: 16px;
+}
+
+.card {
+  background-color: #fff;
+  margin: 0 auto 20px auto;
+  padding: 16px;
+  max-width: 1100px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+h3 {
+  margin-top: 12px;
+  font-size: 16px;
+}
+
+/* Formulários */
+
+.form-group {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-size: 13px;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.form-group input,
+.form-group select {
+  padding: 6px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+.form-inline {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.form-inline .form-group {
+  flex: 1 1 200px;
+}
+
+/* Botões genéricos */
+
+button {
+  font-family: inherit;
+}
+
+/* Botão principal (pode usar class="primary" se quiser) */
+.primary {
+  background-color: #8b0000;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.primary:hover {
+  background-color: #a30000;
+}
+
+/* TABS DE NAVEGAÇÃO – AQUI ESTÁ A MUDANÇA GRANDE */
+
+.nav-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* Cada aba vira um "botão-pílula" vermelho, bem visível */
+.nav-tabs button {
+  padding: 8px 16px;
+  border-radius: 999px; /* pílula */
+  border: 2px solid #8b0000;
+  background-color: #ffffff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.05s ease;
+}
+
+.nav-tabs button:hover {
+  background-color: #ffe5e5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.nav-tabs button:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.nav-tabs button:focus-visible {
+  outline: 3px solid #ffb3b3;
+  outline-offset: 2px;
+}
+
+/* Aba ativa: fundo vermelho, texto branco */
+.nav-tabs button.active-tab {
+  background-color: #8b0000;
+  color: #ffffff;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Se você usa a classe .tab em vez de só button, garante o estilo também */
+.tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid #8b0000;
+  background-color: #ffffff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tab.active-tab {
+  background-color: #8b0000;
+  color: #ffffff;
+}
+
+/* Mensagens */
+
+#login-error {
+  color: #a30000;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+#loading {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Mensagens genéricas */
+
+.msg {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.msg.ok {
+  color: #155724;
+}
+
+.msg.error {
+  color: #a30000;
+}
+
+/* Tabela de vendas e cadastros */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #ddd;
+  padding: 6px 4px;
+  text-align: left;
+}
+
+th {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
+
+.table-small th,
+.table-small td {
+  font-size: 12px;
+  padding: 4px;
+}
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Botões pequenos na tabela */
+
+.btn-small {
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid #888;
+  background-color: #f1f1f1;
+  cursor: pointer;
+  margin-right: 4px;
+}
+
+.btn-small:hover {
+  background-color: #e0e0e0;
+}
+
+.btn-danger {
+  border-color: #a30000;
+  color: #a30000;
+}
+
+/* KPI cards */
+
+.kpi-container {
+  margin-top: 16px;
+}
+
+.kpi-container h4 {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.kpi-card {
+  border-radius: 8px;
+  padding: 8px;
+  background-color: #fff5f5;
+  border: 1px solid #f0c0c0;
+}
+
+.kpi-label {
+  display: block;
+  font-size: 12px;
+  color: #555;
+}
+
+.kpi-value {
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+.totais-label {
+  margin-top: 8px;
+  font-weight: bold;
+}
+
+/* Filtros do extrato */
+
+.filtros-container {
+  margin-top: 8px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  padding: 10px;
+  background-color: #fff5f5;
+  border: 1px solid #f0c0c0;
+}
+
+.filtros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.filtros-botoes {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn-secundario {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #8b0000;
+  background-color: #fff;
+  color: #8b0000;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-secundario:hover {
+  background-color: #ffe5e5;
+}
+
+/* Grid detalhes (produto, forma, cidade) */
+
+.detalhes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Mensagens placeholder / instruções */
+
+.placeholder {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 8px;
+}
+
+/* Responsivo */
+
+@media (max-width: 768px) {
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #user-info {
+    margin-top: 6px;
+  }
+
+  .card {
+    margin: 0 8px 16px 8px;
+    padding: 12px;
+  }
+
+  .form-inline {
+    flex-direction: column;
+  }
+}
+
+/* Tabelas de detalhamento */
+
+.kpi-extra-block {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.kpi-extra-block strong {
+  font-size: 12px;
+}
+
+.kpi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.kpi-table th,
+.kpi-table td {
+  border-bottom: 1px solid #eee;
+  padding: 3px 4px;
+  text-align: left;
+}
+
+.kpi-table th {
+  background-color: #fdf2f2;
+}

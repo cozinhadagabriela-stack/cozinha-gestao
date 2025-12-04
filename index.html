@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cozinha da Gabriela - Gestão</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- CSS separado -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Firebase SDKs (CDN) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <!-- Configuração do Firebase -->
+  <script src="firebase-config.js"></script>
+
+  <!-- Módulos da aplicação -->
+  <script src="js/state.js" defer></script>
+  <script src="js/ui.js" defer></script>
+  <script src="js/cadastros.js" defer></script>
+  <script src="js/estoque.js" defer></script>
+  <script src="js/vendas.js" defer></script>
+  <script src="js/despesas.js" defer></script>
+  <script src="js/auth.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Cozinha da Gabriela - Gestão</h1>
+    <div id="user-info">
+      <span id="user-email"></span>
+      <button id="btn-logout">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- LOGIN -->
+    <div id="login-card" class="card">
+      <h2>Login</h2>
+      <div class="form-group">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" placeholder="seuemail@exemplo.com" />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Senha</label>
+        <input type="password" id="login-password" placeholder="Sua senha" />
+      </div>
+      <button id="btn-login" class="btn-primario">Entrar</button>
+      <span id="loading" class="loading hidden">Carregando...</span>
+      <p id="login-error" class="msg error"></p>
+    </div>
+
+    <!-- APP -->
+    <div id="app-card" class="card hidden">
+      <!-- Abas -->
+      <div class="tabs">
+        <button id="tab-venda" class="tab active-tab">Venda</button>
+        <button id="tab-extrato" class="tab">Extrato / Relatório</button>
+        <button id="tab-estoque" class="tab">Estoque</button>
+        <button id="tab-despesas" class="tab">Despesas</button>
+        <button id="tab-clientes" class="tab">Clientes</button>
+        <button id="tab-produtos" class="tab">Produtos</button>
+        <button id="tab-formas" class="tab">Formas de pagamento</button>
+      </div>
+
+      <!-- Venda -->
+      <div id="section-venda" class="section">
+        <h2>Registrar venda</h2>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="sale-date">Data da venda</label>
+            <input type="date" id="sale-date">
+          </div>
+
+          <div class="form-group">
+            <label for="sale-client">Cliente</label>
+            <select id="sale-client">
+              <option value="">Selecione um cliente</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="sale-payment">Forma de pagamento</label>
+            <select id="sale-payment">
+              <option value="">Selecione a forma de pagamento</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="sale-nf-number">Nº Nota Fiscal</label>
+            <input type="text" id="sale-nf-number" placeholder="Ex.: 12345">
+          </div>
+
+          <div class="form-group">
+            <label for="sale-nf-series">Série Nota Fiscal</label>
+            <input type="text" id="sale-nf-series" placeholder="Ex.: 1">
+          </div>
+        </div>
+
+        <h3>Itens do pedido</h3>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="sale-product">Produto</label>
+            <select id="sale-product">
+              <option value="">Selecione um produto</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="sale-lote">Lote</label>
+            <input type="text" id="sale-lote" placeholder="Ex.: 2025-001" maxlength="8">
+          </div>
+
+          <div class="form-group">
+            <label for="sale-quantity">Quantidade</label>
+            <input type="number" id="sale-quantity" min="1" value="1">
+          </div>
+
+          <div class="form-group">
+            <label for="sale-unit-price">Valor unitário (R$)</label>
+            <input type="number" step="0.01" id="sale-unit-price" placeholder="0,00">
+          </div>
+        </div>
+
+        <button id="btn-add-item" class="btn-primario">Adicionar item</button>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Lote</th>
+                <th>Quantidade</th>
+                <th>Valor unitário (R$)</th>
+                <th>Total (R$)</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="pedido-itens-tbody">
+              <tr><td colspan="6">Nenhum item adicionado.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="form-group">
+          <label for="sale-total">Total do pedido (R$)</label>
+          <input type="number" step="0.01" id="sale-total" placeholder="0,00" readonly>
+        </div>
+
+        <button id="btn-save-sale" class="btn-primario">Salvar venda</button>
+        <p id="sale-message" class="msg"></p>
+      </div>
+
+      <!-- Extrato / Relatório -->
+      <div id="section-extrato" class="section hidden">
+        <h2>Extrato de vendas</h2>
+
+        <div class="filtros-container">
+          <div class="filtros-grid">
+            <div class="form-group">
+              <label for="filter-start">Data inicial</label>
+              <input type="date" id="filter-start">
+            </div>
+            <div class="form-group">
+              <label for="filter-end">Data final</label>
+              <input type="date" id="filter-end">
+            </div>
+            <div class="form-group">
+              <label for="filter-client">Cliente</label>
+              <select id="filter-client">
+                <option value="">Todos os clientes</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="filter-product">Produto</label>
+              <select id="filter-product">
+                <option value="">Todos os produtos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="filter-forma">Forma de pagamento</label>
+              <select id="filter-forma">
+                <option value="">Todas as formas</option>
+              </select>
+            </div>
+          </div>
+          <div class="filtros-botoes">
+            <button id="btn-apply-filters" class="btn-secundario">Aplicar filtros</button>
+            <button id="btn-clear-filters" class="btn-secundario">Limpar filtros</button>
+            <button id="btn-export-csv" class="btn-secundario">
+              Exportar CSV (vendas filtradas)
+            </button>
+          </div>
+        </div>
+
+        <div class="kpi-container">
+          <h4>Indicadores do período filtrado (base nas últimas 100 vendas)</h4>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-label">Total vendido (R$)</span>
+              <span class="kpi-value" id="kpi-total-vendas">R$ 0,00</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Quantidade vendida (unid.)</span>
+              <span class="kpi-value" id="kpi-qtd-vendida">0</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Número de vendas</span>
+              <span class="kpi-value" id="kpi-num-vendas">0</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Cliente com maior valor em compras</span>
+              <span class="kpi-value" id="kpi-top-cliente">—</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Produto mais vendido (por quantidade)</span>
+              <span class="kpi-value" id="kpi-top-produto">—</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Cidade com maior faturamento</span>
+              <span class="kpi-value" id="kpi-top-cidade">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Cliente</th>
+                <th>Produto</th>
+                <th>Quantidade</th>
+                <th>Valor unitário (R$)</th>
+                <th>Total (R$)</th>
+                <th>Lote</th>
+                <th>Nº NF</th>
+                <th>Série</th>
+                <th>Forma</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="sales-tbody">
+              <tr><td colspan="11">Nenhuma venda carregada.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="totais-label">Total filtrado: <span id="sales-total">R$ 0,00</span></p>
+
+        <div class="detalhes-grid">
+          <div>
+            <h4>Resumo por produto</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Qtd</th>
+                  <th>Valor (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="kpi-produtos-tbody">
+                <tr><td colspan="3">Sem dados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h4>Resumo por forma de pagamento</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Forma</th>
+                  <th>Valor (R$)</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody id="kpi-formas-tbody">
+                <tr><td colspan="3">Sem dados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h4>Resumo por cidade</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Cidade</th>
+                  <th>Valor (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="kpi-cidades-tbody">
+                <tr><td colspan="2">Sem dados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estoque -->
+      <div id="section-estoque" class="section hidden">
+        <h2>Estoque de produtos acabados</h2>
+
+        <section class="subsection">
+          <h3>Entrada / ajuste de estoque</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="est-produto">Produto</label>
+              <select id="est-produto">
+                <option value="">Selecione um produto</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="est-lote">Lote</label>
+              <input
+                type="text"
+                id="est-lote"
+                maxlength="8"
+                placeholder="Ex.: 2025-001"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="est-validade">Data de validade</label>
+              <input type="date" id="est-validade" />
+            </div>
+
+            <div class="form-group">
+              <label for="est-cod-barras">Código de barras</label>
+              <input
+                type="text"
+                id="est-cod-barras"
+                placeholder="Ex.: 7891234567890"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="est-quantidade">Quantidade</label>
+              <input
+                type="number"
+                id="est-quantidade"
+                min="1"
+                value="1"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="est-tipo">Tipo de movimento</label>
+              <select id="est-tipo">
+                <option value="ENTRADA">Entrada (+)</option>
+                <option value="SAIDA">Saída (-)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="est-data">Data do movimento</label>
+              <input type="date" id="est-data" />
+            </div>
+          </div>
+
+          <button id="btn-save-estoque" class="btn-primario">
+            Salvar movimento
+          </button>
+          <p id="est-message" class="msg"></p>
+        </section>
+
+        <hr />
+
+        <section class="subsection">
+          <h3>Saldos atuais por produto e lote</h3>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Lote</th>
+                  <th>Validade</th>
+                  <th>Código de barras</th>
+                  <th>Quantidade em estoque</th>
+                </tr>
+              </thead>
+              <tbody id="estoque-saldos-tbody">
+                <tr><td colspan="5">Nenhum saldo cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- Despesas -->
+      <div id="section-despesas" class="section hidden">
+        <h2>Despesas</h2>
+
+        <!-- Cadastro de fornecedores -->
+        <section class="subsection">
+          <h3>Cadastro de fornecedores</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="forn-nome">Nome do fornecedor</label>
+              <input
+                type="text"
+                id="forn-nome"
+                placeholder="Ex.: Atacadão, Mercado X, Embalagens Y"
+              />
+            </div>
+          </div>
+          <button id="btn-save-fornecedor" class="btn-primario">
+            Salvar fornecedor
+          </button>
+          <p id="forn-message" class="msg"></p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="fornecedores-tbody">
+                <tr><td colspan="2">Nenhum fornecedor cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <hr />
+
+        <!-- Lançamento de despesas -->
+        <section class="subsection">
+          <h3>Lançamento de despesas</h3>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="desp-fornecedor">Fornecedor</label>
+              <select id="desp-fornecedor">
+                <option value="">Selecione um fornecedor</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="desp-quantidade">Quantidade</label>
+              <input
+                type="number"
+                id="desp-quantidade"
+                min="1"
+                value="1"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="desp-descricao">Descrição do item</label>
+              <input
+                type="text"
+                id="desp-descricao"
+                placeholder="Ex.: Caixa de embalagens, Gás, Combustível..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="desp-marca">Marca</label>
+              <input
+                type="text"
+                id="desp-marca"
+                placeholder="Ex.: Sadia, Aurora, Marca própria..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="desp-data">Data de pagamento</label>
+              <input type="date" id="desp-data" />
+            </div>
+
+            <div class="form-group">
+              <label for="desp-valor-unitario">Valor unitário (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                id="desp-valor-unitario"
+                placeholder="0,00"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="desp-valor-total">Valor total (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                id="desp-valor-total"
+                placeholder="0,00"
+                readonly
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="desp-forma-pagamento">Forma de pagamento</label>
+              <select id="desp-forma-pagamento">
+                <option value="">Selecione a forma de pagamento</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="btn-save-despesa" class="btn-primario">
+            Salvar despesa
+          </button>
+          <p id="desp-message" class="msg"></p>
+        </section>
+
+        <!-- Filtros de despesas -->
+        <section class="subsection">
+          <h3>Filtros de despesas</h3>
+          <div class="filtros-container">
+            <div class="filtros-grid">
+              <div class="form-group">
+                <label for="desp-filter-start">Data inicial</label>
+                <input type="date" id="desp-filter-start" />
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-end">Data final</label>
+                <input type="date" id="desp-filter-end" />
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-fornecedor">Fornecedor</label>
+                <select id="desp-filter-fornecedor">
+                  <option value="">Todos os fornecedores</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-descricao">Descrição</label>
+                <input
+                  type="text"
+                  id="desp-filter-descricao"
+                  placeholder="Buscar por descrição"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="desp-filter-marca">Marca</label>
+                <input
+                  type="text"
+                  id="desp-filter-marca"
+                  placeholder="Buscar por marca"
+                />
+              </div>
+            </div>
+
+            <div class="filtros-botoes">
+              <button id="btn-desp-apply-filters" class="btn-secundario">
+                Aplicar filtros
+              </button>
+              <button id="btn-desp-clear-filters" class="btn-secundario">
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Lista de despesas -->
+        <section class="subsection">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Fornecedor</th>
+                  <th>Descrição</th>
+                  <th>Marca</th>
+                  <th>Qtd</th>
+                  <th>Valor unit. (R$)</th>
+                  <th>Total (R$)</th>
+                  <th>Forma pagto.</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="despesas-tbody">
+                <tr><td colspan="9">Nenhuma despesa lançada.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="totais-label">
+            Total filtrado: <span id="despesas-total">R$ 0,00</span>
+          </p>
+        </section>
+      </div>
+
+      <!-- Clientes -->
+      <div id="section-clientes" class="section hidden">
+        <h2>Cadastro de clientes</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="cli-nome">Nome</label>
+            <input type="text" id="cli-nome" placeholder="Nome do cliente" />
+          </div>
+          <div class="form-group">
+            <label for="cli-cidade">Cidade</label>
+            <input type="text" id="cli-cidade" placeholder="Cidade do cliente" />
+          </div>
+        </div>
+        <button id="btn-save-cliente" class="btn-primario">Salvar cliente</button>
+        <button id="btn-cancel-cliente" class="btn-secundario hidden">Cancelar edição</button>
+        <p id="cli-message" class="msg"></p>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Cidade</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="clientes-tbody">
+              <tr><td colspan="3">Nenhum cliente cadastrado.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Produtos -->
+      <div id="section-produtos" class="section hidden">
+        <h2>Cadastro de produtos</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="prod-desc">Descrição</label>
+            <input type="text" id="prod-desc" placeholder="Ex.: Sequilho de leite condensado 200g" />
+          </div>
+          <div class="form-group">
+            <label for="prod-peso">Peso (g)</label>
+            <input type="number" id="prod-peso" placeholder="Ex.: 200" />
+          </div>
+          <div class="form-group">
+            <label for="prod-preco">Preço unitário (R$)</label>
+            <input type="number" step="0.01" id="prod-preco" placeholder="Ex.: 10,00" />
+          </div>
+        </div>
+        <button id="btn-save-produto" class="btn-primario">Salvar produto</button>
+        <button id="btn-cancel-produto" class="btn-secundario hidden">Cancelar edição</button>
+        <p id="prod-message" class="msg"></p>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Peso (g)</th>
+                <th>Preço (R$)</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="produtos-tbody">
+              <tr><td colspan="4">Nenhum produto cadastrado.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Formas de pagamento -->
+      <div id="section-formas" class="section hidden">
+        <h2>Formas de pagamento</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="fp-desc">Descrição</label>
+            <input type="text" id="fp-desc" placeholder="Ex.: Dinheiro, Cartão de crédito..." />
+          </div>
+        </div>
+        <button id="btn-save-forma" class="btn-primario">Salvar forma de pagamento</button>
+        <button id="btn-cancel-forma" class="btn-secundario hidden">Cancelar edição</button>
+        <p id="fp-message" class="msg"></p>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="formas-tbody">
+              <tr><td colspan="2">Nenhuma forma cadastrada.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
