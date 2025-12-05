@@ -16,6 +16,17 @@ const estMessage         = document.getElementById("est-message");
 const estoqueSaldosTbody = document.getElementById("estoque-saldos-tbody");
 
 // =============================
+// Helper para formatar data no padrão brasileiro (dd/mm/aaaa)
+// =============================
+function formatarDataBrasil(dataIso) {
+  if (!dataIso) return "";
+  const partes = dataIso.split("-");
+  if (partes.length !== 3) return dataIso;
+  const [ano, mes, dia] = partes;
+  return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
+}
+
+// =============================
 // Preencher produtos no select de estoque
 // =============================
 function preencherProdutosEstoque() {
@@ -81,7 +92,7 @@ async function ajustarSaldoEstoque(
       produtoId,
       produtoDescricao: produtoDescricao || "",
       lote: lote || "",
-      dataValidade: novaValidade,
+      dataValidade: novaValidade,    // continua salvo em ISO (aaaa-mm-dd)
       codigoBarras: novoCodigo,
       quantidade: novo,
       atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
@@ -106,8 +117,9 @@ async function carregarEstoqueSaldos() {
   estoqueSaldosCache = [];
 
   try {
+    // AGORA: ordena pela data de validade (do que vence primeiro para o último)
     const snap = await db.collection("estoque")
-      .orderBy("produtoDescricao")
+      .orderBy("dataValidade")
       .get();
 
     if (snap.empty) {
@@ -142,7 +154,8 @@ async function carregarEstoqueSaldos() {
       tr.appendChild(tdLote);
 
       const tdVal = document.createElement("td");
-      tdVal.textContent = d.dataValidade || "";
+      // Mostra a data no formato brasileiro
+      tdVal.textContent = formatarDataBrasil(d.dataValidade || "");
       tr.appendChild(tdVal);
 
       const tdCod = document.createElement("td");
