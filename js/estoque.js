@@ -117,7 +117,7 @@ async function carregarEstoqueSaldos() {
   estoqueSaldosCache = [];
 
   try {
-    // AGORA: ordena pela data de validade (do que vence primeiro para o último)
+    // Ordena pela data de validade (do que vence primeiro para o último)
     const snap = await db.collection("estoque")
       .orderBy("dataValidade")
       .get();
@@ -143,8 +143,7 @@ async function carregarEstoqueSaldos() {
 
       const tr = document.createElement("tr");
 
-      // IMPORTANTE: mesma ordem do <thead>:
-      // Produto | Lote | Validade | Código de barras | Quantidade
+      // Ordem do <thead>: Produto | Lote | Validade | Código de barras | Quantidade
       const tdProd = document.createElement("td");
       tdProd.textContent = d.produtoDescricao || "";
       tr.appendChild(tdProd);
@@ -154,7 +153,6 @@ async function carregarEstoqueSaldos() {
       tr.appendChild(tdLote);
 
       const tdVal = document.createElement("td");
-      // Mostra a data no formato brasileiro
       tdVal.textContent = formatarDataBrasil(d.dataValidade || "");
       tr.appendChild(tdVal);
 
@@ -169,7 +167,6 @@ async function carregarEstoqueSaldos() {
       estoqueSaldosTbody.appendChild(tr);
     });
 
-    // Se depois de filtrar não sobrou nada, mostra mensagem
     if (!estoqueSaldosTbody.hasChildNodes()) {
       estoqueSaldosTbody.innerHTML =
         '<tr><td colspan="5">Nenhum dado de estoque.</td></tr>';
@@ -265,7 +262,6 @@ async function salvarMovimentoEstoqueManual() {
   }
 
   try {
-    // Ajusta saldo principal (e apaga doc se zerar)
     await ajustarSaldoEstoque(
       produtoId,
       lote,
@@ -274,21 +270,6 @@ async function salvarMovimentoEstoqueManual() {
       dataValidade,
       codigoBarras
     );
-
-    // (Opcional) registrar log de movimento em uma coleção separada
-    // await db.collection("estoque_movimentos").add({
-    //   usuarioId: user.uid,
-    //   produtoId,
-    //   produtoDescricao,
-    //   lote,
-    //   dataValidade,
-    //   codigoBarras,
-    //   quantidade,
-    //   tipo,
-    //   data: dataStr,
-    //   dataTimestamp,
-    //   criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-    // });
 
     if (estMessage) {
       estMessage.textContent = "Movimento de estoque salvo com sucesso!";
