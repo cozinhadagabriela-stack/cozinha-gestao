@@ -332,7 +332,6 @@ function aplicarFiltrosEmMemoria() {
 }
 
 function renderizarVendasFiltradas() {
-  // <<< CORREÇÃO AQUI: só chama a função normalmente >>>
   const vendasFiltradas = aplicarFiltrosEmMemoria();
 
   if (vendasFiltradas.length === 0) {
@@ -362,7 +361,6 @@ function renderizarVendasFiltradas() {
     totalValor += valor;
     totalQtd += qtd;
 
-    // conta nº de pedidos (pedidoChave)
     const chavePedido =
       v.pedidoChave ||
       [
@@ -400,7 +398,6 @@ function renderizarVendasFiltradas() {
     const tr = document.createElement("tr");
 
     const dataTd = document.createElement("td");
-    // EXIBIÇÃO EM FORMATO BRASILEIRO
     dataTd.textContent = formatarDataBrasil(v.data || "");
     tr.appendChild(dataTd);
 
@@ -557,7 +554,6 @@ exportCsvButton.addEventListener("click", () => {
 
   filtradas.forEach(v => {
     const linha = [
-      // Data em formato brasileiro no CSV
       csvValue(formatarDataBrasil(v.data || "")),
       csvValue(v.clienteNome || ""),
       csvValue(v.clienteId || ""),
@@ -678,7 +674,7 @@ saveSaleButton.addEventListener("click", async () => {
   }
 
   const cliente = clientesMap[clienteId] || {};
-   const forma = formasMap[formaId] || {};
+  const forma = formasMap[formaId] || {};
 
   const pedidoChave = [
     dataStr || "",
@@ -691,7 +687,7 @@ saveSaleButton.addEventListener("click", async () => {
   try {
     const dataTimestamp = new Date(dataStr).getTime();
 
-    // Salva cada item e, se tiver lote com estoque, dá baixa
+    // Salva cada item e, se tiver lote com estoque, tenta dar baixa
     for (const item of itensParaSalvar) {
       const produto = produtosMap[item.produtoId] || {};
       const quantidade = Number(item.quantidade || 0);
@@ -702,7 +698,7 @@ saveSaleButton.addEventListener("click", async () => {
       // 1) Salva a venda do item
       await db.collection("vendas").add({
         usuarioId: user.uid,
-        data: dataStr,              // continua salvo em ISO (aaaa-mm-dd)
+        data: dataStr,              // salvo em ISO (aaaa-mm-dd)
         dataTimestamp,
         clienteId,
         clienteNome: cliente.nome || "",
@@ -722,15 +718,35 @@ saveSaleButton.addEventListener("click", async () => {
       });
 
       // 2) Integração com estoque
-      if (lote && typeof obterSaldoEstoque === "function" && typeof ajustarSaldoEstoque === "function") {
+      if (
+        lote &&
+        typeof window.obterSaldoEstoque === "function" &&
+        typeof window.ajustarSaldoEstoque === "function"
+      ) {
         try {
-          const saldoAtual = await obterSaldoEstoque(item.produtoId, lote);
-          if (saldoAtual > 0) {
-            await ajustarSaldoEstoque(
+          const saldoAtual = await window.obterSaldoEstoque(item.produtoId, lote);
+          console.log("[ESTOQUE] Tentando baixa na venda:", {
+            produtoId: item.produtoId,
+            lote,
+            quantidadeVenda: quantidade,
+            saldoAtual
+          });
+
+          if (saldoAtual >= quantidade) {
+            await window.ajustarSaldoEstoque(
               item.produtoId,
               lote,
               produto.descricao || "",
               -quantidade
+            );
+          } else if (saldoAtual > 0 && saldoAtual < quantidade) {
+            console.warn(
+              `[ESTOQUE] Venda maior que o saldo. Estoque: ${saldoAtual}, venda: ${quantidade}.`
+            );
+            // Não baixa nada, apenas avisa no console
+          } else {
+            console.warn(
+              "[ESTOQUE] Nenhum saldo encontrado para esse produto/lote. Venda não baixou estoque."
             );
           }
         } catch (e) {
