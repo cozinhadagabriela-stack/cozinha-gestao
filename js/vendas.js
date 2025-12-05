@@ -678,7 +678,7 @@ saveSaleButton.addEventListener("click", async () => {
   }
 
   const cliente = clientesMap[clienteId] || {};
-  ￼const forma = formasMap[formaId] || {};
+   const forma = formasMap[formaId] || {};
 
   const pedidoChave = [
     dataStr || "",
