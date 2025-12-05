@@ -9,6 +9,17 @@ if (typeof ultimasVendasCache === "undefined") {
 const pedidoItensTbody = document.getElementById("pedido-itens-tbody");
 const btnAddItem = document.getElementById("btn-add-item");
 
+// ====== FUNÇÕES AUXILIARES (GERAIS) ======
+
+// Formata "aaaa-mm-dd" -> "dd/mm/aaaa"
+function formatarDataBrasil(dataIso) {
+  if (!dataIso) return "";
+  const partes = dataIso.split("-");
+  if (partes.length !== 3) return dataIso;
+  const [ano, mes, dia] = partes;
+  return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
+}
+
 // ====== FUNÇÕES AUXILIARES (VENDA) ======
 
 // Atualiza o campo "Total do pedido (R$)"
@@ -218,7 +229,13 @@ function atualizarKPIsVazios() {
   kpiCidadesBody.innerHTML = '<tr><td colspan="2">Sem dados.</td></tr>';
 }
 
-function atualizarTabelasDetalhe(mapaProdutoQtd, mapaProdutoValor, mapaFormaValor, mapaCidadeValor, totalValor) {
+function atualizarTabelasDetalhe(
+  mapaProdutoQtd,
+  mapaProdutoValor,
+  mapaFormaValor,
+  mapaCidadeValor,
+  totalValor
+) {
   // Produtos
   const produtoEntries = Object.keys(mapaProdutoQtd).map(desc => ({
     descricao: desc,
@@ -315,6 +332,7 @@ function aplicarFiltrosEmMemoria() {
 }
 
 function renderizarVendasFiltradas() {
+  // <<< CORREÇÃO AQUI: só chama a função normalmente >>>
   const vendasFiltradas = aplicarFiltrosEmMemoria();
 
   if (vendasFiltradas.length === 0) {
@@ -382,7 +400,8 @@ function renderizarVendasFiltradas() {
     const tr = document.createElement("tr");
 
     const dataTd = document.createElement("td");
-    dataTd.textContent = v.data || "";
+    // EXIBIÇÃO EM FORMATO BRASILEIRO
+    dataTd.textContent = formatarDataBrasil(v.data || "");
     tr.appendChild(dataTd);
 
     const clienteTd = document.createElement("td");
@@ -538,7 +557,8 @@ exportCsvButton.addEventListener("click", () => {
 
   filtradas.forEach(v => {
     const linha = [
-      csvValue(v.data || ""),
+      // Data em formato brasileiro no CSV
+      csvValue(formatarDataBrasil(v.data || "")),
       csvValue(v.clienteNome || ""),
       csvValue(v.clienteId || ""),
       csvValue(v.produtoDescricao || ""),
@@ -658,7 +678,7 @@ saveSaleButton.addEventListener("click", async () => {
   }
 
   const cliente = clientesMap[clienteId] || {};
-  const forma = formasMap[formaId] || {};
+  ￼const forma = formasMap[formaId] || {};
 
   const pedidoChave = [
     dataStr || "",
@@ -682,7 +702,7 @@ saveSaleButton.addEventListener("click", async () => {
       // 1) Salva a venda do item
       await db.collection("vendas").add({
         usuarioId: user.uid,
-        data: dataStr,
+        data: dataStr,              // continua salvo em ISO (aaaa-mm-dd)
         dataTimestamp,
         clienteId,
         clienteNome: cliente.nome || "",
@@ -701,15 +721,11 @@ saveSaleButton.addEventListener("click", async () => {
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
       });
 
-      // 2) Integração com estoque:
-      //    - se tiver lote preenchido
-      //    - e existir saldo (> 0) para esse produto+lote
-      //      => dá baixa na quantidade vendida
+      // 2) Integração com estoque
       if (lote && typeof obterSaldoEstoque === "function" && typeof ajustarSaldoEstoque === "function") {
         try {
           const saldoAtual = await obterSaldoEstoque(item.produtoId, lote);
           if (saldoAtual > 0) {
-            // delta negativo = saída
             await ajustarSaldoEstoque(
               item.produtoId,
               lote,
@@ -717,10 +733,8 @@ saveSaleButton.addEventListener("click", async () => {
               -quantidade
             );
           }
-          // Se saldoAtual for 0, não faz nada: permite venda mesmo sem estoque
         } catch (e) {
           console.error("Erro ao atualizar estoque na venda:", e);
-          // Não bloqueia a venda; apenas registra o erro no console
         }
       }
     }
