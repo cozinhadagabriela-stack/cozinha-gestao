@@ -41,6 +41,15 @@ function formatarMoedaBR(valor) {
   return "R$ " + num.toFixed(2).replace(".", ",");
 }
 
+// Formata "aaaa-mm-dd" -> "dd/mm/aaaa"
+function formatarDataBrasil(dataIso) {
+  if (!dataIso) return "";
+  const partes = dataIso.split("-");
+  if (partes.length !== 3) return dataIso;
+  const [ano, mes, dia] = partes;
+  return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
+}
+
 // Atualizar total da despesa (qtd x valor unit)
 function atualizarTotalDespesa() {
   if (!despValorTotalInput) return;
@@ -240,6 +249,11 @@ async function carregarDespesas() {
       });
     });
 
+    // Ordenação do mais velho para o mais novo
+    despesasCache.sort(
+      (a, b) => (a.dataPagamentoTimestamp || 0) - (b.dataPagamentoTimestamp || 0)
+    );
+
     renderizarDespesas(despesasCache);
   } catch (e) {
     console.error("Erro ao carregar despesas:", e);
@@ -275,7 +289,8 @@ function renderizarDespesas(lista) {
     const tr = document.createElement("tr");
 
     const tdData = document.createElement("td");
-    tdData.textContent = d.dataPagamento || "";
+    // Exibe a data em formato brasileiro
+    tdData.textContent = formatarDataBrasil(d.dataPagamento || "");
     tr.appendChild(tdData);
 
     const tdForn = document.createElement("td");
@@ -394,6 +409,11 @@ function aplicarFiltrosDespesas() {
     );
   }
 
+  // Ordena do mais velho para o mais novo
+  filtradas.sort(
+    (a, b) => (a.dataPagamentoTimestamp || 0) - (b.dataPagamentoTimestamp || 0)
+  );
+
   renderizarDespesas(filtradas);
 }
 
@@ -404,6 +424,7 @@ function limparFiltrosDespesas() {
   if (despFilterDescricaoInput) despFilterDescricaoInput.value = "";
   if (despFilterMarcaInput) despFilterMarcaInput.value = "";
 
+  // volta para a lista completa (já em ordem crescente)
   renderizarDespesas(despesasCache);
 }
 
@@ -479,8 +500,8 @@ async function salvarDespesa() {
       quantidade,
       descricaoItem: descricao,
       marca,
-      dataPagamento: dataPag,
-      dataPagamentoTimestamp: dataTimestamp,
+      dataPagamento: dataPag,                 // ISO
+      dataPagamentoTimestamp: dataTimestamp,  // usado p/ ordenar
       valorUnitario: valorUnit,
       valorTotal,
       formaId,
