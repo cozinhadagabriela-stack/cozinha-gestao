@@ -462,6 +462,96 @@
 
         <hr />
 
+        <!-- Cadastro de itens de despesa -->
+        <section class="subsection">
+          <h3>Cadastro de itens por fornecedor</h3>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="item-fornecedor">Fornecedor</label>
+              <select id="item-fornecedor">
+                <option value="">Selecione um fornecedor</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="item-descricao">Descrição do item</label>
+              <input
+                type="text"
+                id="item-descricao"
+                placeholder="Ex.: Amido de milho 25kg, Trigo 50kg..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="item-categoria">Categoria</label>
+              <select id="item-categoria">
+                <option value="">Selecione uma categoria</option>
+                <option value="Matéria-prima">Matéria-prima</option>
+                <option value="Embalagens">Embalagens</option>
+                <option value="Insumos de produção">Insumos de produção</option>
+                <option value="Despesas fixas">Despesas fixas</option>
+                <option value="Tributos">Tributos</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="item-unidade">Unidade</label>
+              <input
+                type="text"
+                id="item-unidade"
+                placeholder="Ex.: kg, un, cx, saco..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="item-cod-barras">Código de barras</label>
+              <input
+                type="text"
+                id="item-cod-barras"
+                placeholder="Opcional"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="item-preco-padrao">Preço unitário padrão (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                id="item-preco-padrao"
+                placeholder="Opcional"
+              />
+            </div>
+          </div>
+
+          <button id="btn-save-item-despesa" class="btn-primario">
+            Salvar item
+          </button>
+          <p id="item-message" class="msg"></p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Item</th>
+                  <th>Categoria</th>
+                  <th>Unidade</th>
+                  <th>Cód. barras</th>
+                  <th>Preço padrão (R$)</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="itens-despesas-tbody">
+                <tr><td colspan="7">Nenhum item cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <hr />
+
         <!-- Lançamento de despesas -->
         <section class="subsection">
           <h3>Lançamento de despesas</h3>
@@ -471,6 +561,13 @@
               <label for="desp-fornecedor">Fornecedor</label>
               <select id="desp-fornecedor">
                 <option value="">Selecione um fornecedor</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="desp-item">Item do fornecedor</label>
+              <select id="desp-item">
+                <option value="">Selecione um item (opcional)</option>
               </select>
             </div>
 
@@ -489,7 +586,7 @@
               <input
                 type="text"
                 id="desp-descricao"
-                placeholder="Ex.: Caixa de embalagens, Gás, Combustível..."
+                placeholder="Descrição do item (pode vir do cadastro)"
               />
             </div>
 
@@ -498,7 +595,7 @@
               <input
                 type="text"
                 id="desp-marca"
-                placeholder="Ex.: Sadia, Aurora, Marca própria..."
+                placeholder="Ex.: Sadia, Aurora, Marca própria... (opcional)"
               />
             </div>
 
