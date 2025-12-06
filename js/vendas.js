@@ -13,6 +13,11 @@ const btnAddItem = document.getElementById("btn-add-item");
 let chartFaturamentoMensal = null;
 let chartDistribuicaoProdutos = null;
 
+// ====== NOVOS KPIs EXTRATO ======
+const kpiTicketMedio = document.getElementById("kpi-ticket-medio");
+const kpiClientesUnicos = document.getElementById("kpi-clientes-unicos");
+const kpiCidadesAtendidas = document.getElementById("kpi-cidades-atendidas");
+
 // ====== FUNÇÕES AUXILIARES (GERAIS) ======
 
 // Formata "aaaa-mm-dd" -> "dd/mm/aaaa"
@@ -232,6 +237,10 @@ function atualizarKPIsVazios() {
   kpiTopProduto.textContent = "—";
   kpiTopCidade.textContent = "—";
 
+  if (kpiTicketMedio) kpiTicketMedio.textContent = "R$ 0,00";
+  if (kpiClientesUnicos) kpiClientesUnicos.textContent = "0";
+  if (kpiCidadesAtendidas) kpiCidadesAtendidas.textContent = "0";
+
   kpiProdutosBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
   kpiFormasBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
   kpiCidadesBody.innerHTML = '<tr><td colspan="2">Sem dados.</td></tr>';
@@ -391,7 +400,6 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
         scales: {
           y: {
             ticks: {
-              // simples, sem formatação de moeda aqui
               beginAtZero: true
             }
           }
@@ -655,6 +663,26 @@ function renderizarVendasFiltradas() {
   kpiTopCidade.textContent = topCidade === "—"
     ? "—"
     : `${topCidade} (R$ ${topCidadeValor.toFixed(2)})`;
+
+  // ===== NOVOS KPIs =====
+  if (kpiTicketMedio) {
+    if (totalPedidos > 0) {
+      const ticket = totalValor / totalPedidos;
+      kpiTicketMedio.textContent = `R$ ${ticket.toFixed(2)}`;
+    } else {
+      kpiTicketMedio.textContent = "R$ 0,00";
+    }
+  }
+
+  if (kpiClientesUnicos) {
+    const numClientesUnicos = Object.keys(mapaClienteValor).length;
+    kpiClientesUnicos.textContent = String(numClientesUnicos);
+  }
+
+  if (kpiCidadesAtendidas) {
+    const cidadesValidas = Object.keys(mapaCidadeValor).filter(c => c && c.trim() !== "");
+    kpiCidadesAtendidas.textContent = String(cidadesValidas.length);
+  }
 
   atualizarTabelasDetalhe(
     mapaProdutoQtd,
