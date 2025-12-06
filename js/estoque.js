@@ -3,6 +3,9 @@
 // Saldos em memória (opcional)
 let estoqueSaldosCache = [];
 
+// Gráfico de estoque por produto (Chart.js)
+let estoqueChart = null;
+
 // Referências de estoque
 const estProdutoSelect   = document.getElementById("est-produto");
 const estLoteInput       = document.getElementById("est-lote");
@@ -110,6 +113,84 @@ async function ajustarSaldoEstoque(
 window.preencherProdutosEstoque = preencherProdutosEstoque;
 window.obterSaldoEstoque        = obterSaldoEstoque;
 window.ajustarSaldoEstoque      = ajustarSaldoEstoque;
+
+// =============================
+// GRÁFICO: Estoque total por produto (somando todos os lotes)
+// =============================
+function atualizarGraficoEstoque() {
+  // Se Chart.js não estiver carregado ou não houver canvas, não faz nada
+  if (typeof Chart === "undefined") return;
+  const canvas = document.getElementById("chart-estoque-produtos");
+  if (!canvas) return;
+
+  // Monta mapa Produto -> soma das quantidades
+  const mapa = {};
+  (estoqueSaldosCache || []).forEach((reg) => {
+    if (!reg) return;
+    const nome = (reg.produtoDescricao || "").trim();
+    const qtd = Number(reg.quantidade || 0);
+    if (!nome || isNaN(qtd) || qtd <= 0) return;
+    mapa[nome] = (mapa[nome] || 0) + qtd;
+  });
+
+  const labels = Object.keys(mapa);
+  const valores = labels.map((nome) => mapa[nome]);
+
+  // Se não tem dados, limpa o gráfico se existir
+  if (!labels.length) {
+    if (estoqueChart) {
+      estoqueChart.destroy();
+      estoqueChart = null;
+    }
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+
+  if (estoqueChart) {
+    // Atualiza gráfico existente
+    estoqueChart.data.labels = labels;
+    estoqueChart.data.datasets[0].data = valores;
+    estoqueChart.update();
+  } else {
+    // Cria gráfico novo
+    estoqueChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Quantidade em estoque (unidades)",
+            data: valores,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: true,
+          },
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: "Produto",
+            },
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: "Quantidade",
+            },
+          },
+        },
+      },
+    });
+  }
+}
 
 // =============================
 // ENTRAR EM MODO EDIÇÃO (quando clica em "Editar" na tabela)
@@ -242,6 +323,8 @@ async function carregarEstoqueSaldos() {
     if (snap.empty) {
       estoqueSaldosTbody.innerHTML =
         '<tr><td colspan="6">Nenhum dado de estoque.</td></tr>';
+      estoqueSaldosCache = [];
+      atualizarGraficoEstoque();
       return;
     }
 
@@ -312,10 +395,15 @@ async function carregarEstoqueSaldos() {
       estoqueSaldosTbody.innerHTML =
         '<tr><td colspan="6">Nenhum dado de estoque.</td></tr>';
     }
+
+    // Atualiza gráfico sempre que recarregar saldos
+    atualizarGraficoEstoque();
   } catch (e) {
     console.error("Erro ao carregar saldos de estoque:", e);
     estoqueSaldosTbody.innerHTML =
       '<tr><td colspan="6">Erro ao carregar saldos.</td></tr>';
+    estoqueSaldosCache = [];
+    atualizarGraficoEstoque();
   }
 }
 
