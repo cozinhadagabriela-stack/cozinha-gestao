@@ -662,6 +662,20 @@
               </div>
 
               <div class="form-group">
+                <label for="desp-filter-categoria">Categoria</label>
+                <select id="desp-filter-categoria">
+                  <option value="">Todas as categorias</option>
+                  <option value="Matéria-prima">Matéria-prima</option>
+                  <option value="Embalagens">Embalagens</option>
+                  <option value="Insumos de produção">Insumos de produção</option>
+                  <option value="Despesas fixas">Despesas fixas</option>
+                  <option value="Tributos">Tributos</option>
+                  <option value="Outros">Outros</option>
+                  <option value="Sem categoria">Sem categoria</option>
+                </select>
+              </div>
+
+              <div class="form-group">
                 <label for="desp-filter-descricao">Descrição</label>
                 <input
                   type="text"
@@ -687,92 +701,6 @@
               <button id="btn-desp-clear-filters" class="btn-secundario">
                 Limpar filtros
               </button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Indicadores de despesas -->
-        <section class="subsection">
-          <h3>Indicadores do período filtrado</h3>
-          <div class="kpi-container">
-            <div class="kpi-grid">
-              <div class="kpi-card">
-                <span class="kpi-label">Total de despesas (R$)</span>
-                <span class="kpi-value" id="kpi-desp-total">R$ 0,00</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-label">Matéria-prima + Embalagens</span>
-                <span class="kpi-value" id="kpi-desp-mp-emb">R$ 0,00</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-label">Despesas fixas</span>
-                <span class="kpi-value" id="kpi-desp-fixas">R$ 0,00</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-label">Nº de lançamentos</span>
-                <span class="kpi-value" id="kpi-desp-num-lanc">0</span>
-              </div>
-              <div class="kpi-card">
-                <span class="kpi-label">Fornecedor com maior gasto</span>
-                <span class="kpi-value" id="kpi-desp-top-forn">—</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Gráficos de despesas -->
-        <section class="subsection">
-          <h3>Gráficos de despesas</h3>
-          <div class="charts-grid">
-            <div class="chart-card">
-              <h4>Despesas por categoria</h4>
-              <div class="chart-wrapper">
-                <canvas id="chart-desp-categorias"></canvas>
-              </div>
-            </div>
-            <div class="chart-card">
-              <h4>Top 5 fornecedores</h4>
-              <div class="chart-wrapper">
-                <canvas id="chart-desp-fornecedores"></canvas>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Resumos de despesas -->
-        <section class="subsection">
-          <h3>Resumos de despesas</h3>
-          <div class="detalhes-grid">
-            <div>
-              <h4>Resumo por categoria</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Categoria</th>
-                    <th>Valor (R$)</th>
-                    <th>%</th>
-                  </tr>
-                </thead>
-                <tbody id="kpi-desp-categorias-tbody">
-                  <tr><td colspan="3">Sem dados.</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div>
-              <h4>Resumo por fornecedor (Top 10)</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fornecedor</th>
-                    <th>Valor (R$)</th>
-                    <th>%</th>
-                  </tr>
-                </thead>
-                <tbody id="kpi-desp-fornecedores-tbody">
-                  <tr><td colspan="3">Sem dados.</td></tr>
-                </tbody>
-              </table>
             </div>
           </div>
         </section>
