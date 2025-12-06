@@ -13,10 +13,81 @@ const btnAddItem = document.getElementById("btn-add-item");
 let chartFaturamentoMensal = null;
 let chartDistribuicaoProdutos = null;
 
-// ====== NOVOS KPIs EXTRATO ======
-const kpiTicketMedio = document.getElementById("kpi-ticket-medio");
-const kpiClientesUnicos = document.getElementById("kpi-clientes-unicos");
-const kpiCidadesAtendidas = document.getElementById("kpi-cidades-atendidas");
+// Plugin para desenhar linhas de chamada e rótulos percentuais no gráfico de pizza
+// (Distribuição de vendas por produto)
+const pieCalloutPlugin = {
+  id: "pieCallout",
+  afterDatasetsDraw(chart, args, pluginOptions) {
+    if (chart.config.type !== "pie") return;
+
+    const { ctx } = chart;
+    const dataset = chart.data.datasets[0];
+    if (!dataset) return;
+
+    const data = dataset.data || [];
+    const total = data.reduce((acc, val) => acc + Number(val || 0), 0);
+    if (total <= 0) return;
+
+    const meta = chart.getDatasetMeta(0);
+    const opts = pluginOptions || {};
+    const lineColor = opts.color || "#666";
+    const lineWidth = opts.lineWidth || 1;
+    const font = opts.font || "12px Arial";
+    const textColor = opts.textColor || "#333";
+    const labelOffset = opts.labelOffset || 4;
+    const extraRadius = opts.extraRadius || 15;
+
+    ctx.save();
+    ctx.font = font;
+    ctx.fillStyle = textColor;
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = lineWidth;
+
+    meta.data.forEach((arc, index) => {
+      const value = Number(data[index] || 0);
+      if (!arc || !isFinite(value) || value <= 0) return;
+
+      const percent = ((value / total) * 100).toFixed(1) + "%";
+      const angle = (arc.startAngle + arc.endAngle) / 2;
+
+      const xCenter = arc.x;
+      const yCenter = arc.y;
+      const rOuter = arc.outerRadius;
+
+      // Ponto inicial na borda da fatia
+      const xFrom = xCenter + Math.cos(angle) * rOuter;
+      const yFrom = yCenter + Math.sin(angle) * rOuter;
+
+      // Ponto final (fora da pizza)
+      const xTo = xCenter + Math.cos(angle) * (rOuter + extraRadius);
+      const yTo = yCenter + Math.sin(angle) * (rOuter + extraRadius);
+
+      ctx.beginPath();
+      ctx.moveTo(xFrom, yFrom);
+      ctx.lineTo(xTo, yTo);
+      ctx.stroke();
+
+      const label = percent;
+
+      // Decide se o texto fica à direita ou à esquerda
+      const textWidth = ctx.measureText(label).width;
+      const isRightSide = Math.cos(angle) >= 0;
+      const textX = isRightSide
+        ? xTo + labelOffset
+        : xTo - textWidth - labelOffset;
+      const textY = yTo + 4; // pequeno ajuste vertical
+
+      ctx.fillText(label, textX, textY);
+    });
+
+    ctx.restore();
+  }
+};
+
+// registra o plugin globalmente (Chart.js já está carregado no index.html)
+if (typeof Chart !== "undefined") {
+  Chart.register(pieCalloutPlugin);
+}
 
 // ====== FUNÇÕES AUXILIARES (GERAIS) ======
 
@@ -82,8 +153,7 @@ function renderizarItensPedido() {
     tr.appendChild(tdLote);
 
     const tdQtd = document.createElement("td");
-    tdQtd.textContent =
-      item.quantidade != null ? item.quantidade : "";
+    tdQtd.textContent = item.quantidade != null ? item.quantidade : "";
     tr.appendChild(tdQtd);
 
     const tdValorUnit = document.createElement("td");
@@ -130,7 +200,11 @@ function limparCamposItem() {
 // Quando mudar o produto, puxa o preço padrão
 saleProductSelect.addEventListener("change", () => {
   const id = saleProductSelect.value;
-  if (id && produtosMap[id] && typeof produtosMap[id].precoUnitario === "number") {
+  if (
+    id &&
+    produtosMap[id] &&
+    typeof produtosMap[id].precoUnitario === "number"
+  ) {
     saleUnitPriceInput.value = produtosMap[id].precoUnitario.toFixed(2);
   }
   atualizarTotal();
@@ -198,20 +272,22 @@ async function carregarUltimasVendas() {
   ultimasVendasCache = [];
 
   try {
-    const snapshot = await db.collection("vendas")
+    const snapshot = await db
+      .collection("vendas")
       .orderBy("dataTimestamp", "desc")
       .limit(100)
       .get();
 
     if (snapshot.empty) {
-      salesTbody.innerHTML = '<tr><td colspan="11">Nenhuma venda encontrada.</td></tr>';
+      salesTbody.innerHTML =
+        '<tr><td colspan="11">Nenhuma venda encontrada.</td></tr>';
       atualizarKPIsVazios();
       atualizarGraficoFaturamentoMensal([]);
       atualizarGraficoDistribuicaoProdutos({});
       return;
     }
 
-    snapshot.forEach(doc => {
+    snapshot.forEach((doc) => {
       const v = doc.data();
       ultimasVendasCache.push({
         id: doc.id,
@@ -222,7 +298,8 @@ async function carregarUltimasVendas() {
     renderizarVendasFiltradas();
   } catch (e) {
     console.error("Erro ao carregar vendas:", e);
-    salesTbody.innerHTML = '<tr><td colspan="11">Erro ao carregar vendas.</td></tr>';
+    salesTbody.innerHTML =
+      '<tr><td colspan="11">Erro ao carregar vendas.</td></tr>';
     atualizarKPIsVazios();
     atualizarGraficoFaturamentoMensal([]);
     atualizarGraficoDistribuicaoProdutos({});
@@ -237,13 +314,14 @@ function atualizarKPIsVazios() {
   kpiTopProduto.textContent = "—";
   kpiTopCidade.textContent = "—";
 
-  if (kpiTicketMedio) kpiTicketMedio.textContent = "R$ 0,00";
-  if (kpiClientesUnicos) kpiClientesUnicos.textContent = "0";
-  if (kpiCidadesAtendidas) kpiCidadesAtendidas.textContent = "0";
-
-  kpiProdutosBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
+  // agora produtos têm 4 colunas (inclui %)
+  kpiProdutosBody.innerHTML =
+    '<tr><td colspan="4">Sem dados.</td></tr>';
+  // formas continuam com 3 colunas
   kpiFormasBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
-  kpiCidadesBody.innerHTML = '<tr><td colspan="2">Sem dados.</td></tr>';
+  // cidades agora têm 3 colunas (inclui %)
+  kpiCidadesBody.innerHTML =
+    '<tr><td colspan="3">Sem dados.</td></tr>';
 }
 
 // Tabelas de resumo (produto, forma, cidade)
@@ -255,76 +333,112 @@ function atualizarTabelasDetalhe(
   totalValor
 ) {
   // Produtos
-  const produtoEntries = Object.keys(mapaProdutoQtd).map(desc => ({
+  const produtoEntries = Object.keys(mapaProdutoQtd).map((desc) => ({
     descricao: desc,
     qtd: mapaProdutoQtd[desc] || 0,
-    valor: mapaProdutoValor[desc] || 0
+    valor: mapaProdutoValor[desc] || 0,
+    perc:
+      totalValor > 0
+        ? (mapaProdutoValor[desc] / totalValor) * 100
+        : 0
   })).sort((a, b) => b.valor - a.valor);
 
   if (produtoEntries.length === 0) {
-    kpiProdutosBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
+    kpiProdutosBody.innerHTML =
+      '<tr><td colspan="4">Sem dados.</td></tr>';
   } else {
     kpiProdutosBody.innerHTML = "";
-    produtoEntries.forEach(p => {
+    produtoEntries.forEach((p) => {
       const tr = document.createElement("tr");
+
       const tdDesc = document.createElement("td");
       tdDesc.textContent = p.descricao;
+
       const tdQtd = document.createElement("td");
       tdQtd.textContent = p.qtd;
+
       const tdVal = document.createElement("td");
       tdVal.textContent = p.valor.toFixed(2);
+
+      const tdPerc = document.createElement("td");
+      tdPerc.textContent =
+        totalValor > 0 ? p.perc.toFixed(1) + "%" : "0,0%";
+
       tr.appendChild(tdDesc);
       tr.appendChild(tdQtd);
       tr.appendChild(tdVal);
+      tr.appendChild(tdPerc);
+
       kpiProdutosBody.appendChild(tr);
     });
   }
 
   // Formas de pagamento
-  const formaEntries = Object.keys(mapaFormaValor).map(desc => ({
+  const formaEntries = Object.keys(mapaFormaValor).map((desc) => ({
     descricao: desc,
     valor: mapaFormaValor[desc] || 0
   })).sort((a, b) => b.valor - a.valor);
 
   if (formaEntries.length === 0) {
-    kpiFormasBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
+    kpiFormasBody.innerHTML =
+      '<tr><td colspan="3">Sem dados.</td></tr>';
   } else {
     kpiFormasBody.innerHTML = "";
-    formaEntries.forEach(f => {
+    formaEntries.forEach((f) => {
       const tr = document.createElement("tr");
+
       const tdDesc = document.createElement("td");
       tdDesc.textContent = f.descricao;
+
       const tdVal = document.createElement("td");
       tdVal.textContent = f.valor.toFixed(2);
+
       const tdPerc = document.createElement("td");
-      tdPerc.textContent = totalValor > 0
-        ? ((f.valor / totalValor) * 100).toFixed(1) + "%"
-        : "0,0%";
+      tdPerc.textContent =
+        totalValor > 0
+          ? ((f.valor / totalValor) * 100).toFixed(1) + "%"
+          : "0,0%";
+
       tr.appendChild(tdDesc);
       tr.appendChild(tdVal);
       tr.appendChild(tdPerc);
+
       kpiFormasBody.appendChild(tr);
     });
   }
 
   // Cidades
-  const cidadeEntries = Object.keys(mapaCidadeValor).map(cidade => ({
+  const cidadeEntries = Object.keys(mapaCidadeValor).map((cidade) => ({
     cidade,
-    valor: mapaCidadeValor[cidade] || 0
+    valor: mapaCidadeValor[cidade] || 0,
+    perc:
+      totalValor > 0
+        ? (mapaCidadeValor[cidade] / totalValor) * 100
+        : 0
   })).sort((a, b) => b.valor - a.valor);
 
   if (cidadeEntries.length === 0) {
-    kpiCidadesBody.innerHTML = '<tr><td colspan="2">Sem dados.</td></tr>';
+    kpiCidadesBody.innerHTML =
+      '<tr><td colspan="3">Sem dados.</td></tr>';
   } else {
     kpiCidadesBody.innerHTML = "";
-    cidadeEntries.forEach(c => {
+    cidadeEntries.forEach((c) => {
       const tr = document.createElement("tr");
+
       const tdCidade = document.createElement("td");
       tdCidade.textContent = c.cidade;
+
       const tdVal = document.createElement("td");
       tdVal.textContent = c.valor.toFixed(2);
+
+      const tdPerc = document.createElement("td");
+      tdPerc.textContent =
+        totalValor > 0 ? c.perc.toFixed(1) + "%" : "0,0%";
+
       tr.appendChild(tdCidade);
       tr.appendChild(tdVal);
+      tr.appendChild(tdPerc);
+
       kpiCidadesBody.appendChild(tr);
     });
   }
@@ -348,7 +462,7 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
 
   const mapaMesValor = {};
 
-  vendasFiltradas.forEach(v => {
+  vendasFiltradas.forEach((v) => {
     const dataIso = v.data || "";
     if (!dataIso || dataIso.length < 7) return;
     const anoMes = dataIso.slice(0, 7); // "aaaa-mm"
@@ -366,11 +480,11 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
     return;
   }
 
-  const labels = chavesOrdenadas.map(ym => {
+  const labels = chavesOrdenadas.map((ym) => {
     const [ano, mes] = ym.split("-");
     return `${mes}/${ano}`;
   });
-  const valores = chavesOrdenadas.map(ym => mapaMesValor[ym]);
+  const valores = chavesOrdenadas.map((ym) => mapaMesValor[ym]);
 
   if (chartFaturamentoMensal) {
     chartFaturamentoMensal.data.labels = labels;
@@ -382,12 +496,14 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
       type: "line",
       data: {
         labels,
-        datasets: [{
-          label: "Faturamento (R$)",
-          data: valores,
-          fill: false,
-          tension: 0.2
-        }]
+        datasets: [
+          {
+            label: "Faturamento (R$)",
+            data: valores,
+            fill: false,
+            tension: 0.2
+          }
+        ]
       },
       options: {
         responsive: true,
@@ -414,10 +530,12 @@ function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
   const canvas = document.getElementById("chart-produtos");
   if (!canvas || typeof Chart === "undefined") return;
 
-  const entries = Object.keys(mapaProdutoQtd || {}).map(desc => ({
-    descricao: desc,
-    qtd: mapaProdutoQtd[desc] || 0
-  })).filter(e => e.qtd > 0)
+  const entries = Object.keys(mapaProdutoQtd || {})
+    .map((desc) => ({
+      descricao: desc,
+      qtd: mapaProdutoQtd[desc] || 0
+    }))
+    .filter((e) => e.qtd > 0)
     .sort((a, b) => b.qtd - a.qtd);
 
   if (entries.length === 0) {
@@ -428,13 +546,19 @@ function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
     return;
   }
 
-  const labels = entries.map(e => e.descricao);
-  const dados = entries.map(e => e.qtd);
+  const labels = entries.map((e) => e.descricao);
+  const dados = entries.map((e) => e.qtd);
 
   // Paleta simples de cores
   const baseColors = [
-    "#ff6384", "#36a2eb", "#ffcd56", "#4bc0c0",
-    "#9966ff", "#ff9f40", "#8dd17e", "#ff6f91"
+    "#ff6384",
+    "#36a2eb",
+    "#ffcd56",
+    "#4bc0c0",
+    "#9966ff",
+    "#ff9f40",
+    "#8dd17e",
+    "#ff6f91"
   ];
   const cores = labels.map((_, i) => baseColors[i % baseColors.length]);
 
@@ -449,11 +573,13 @@ function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
       type: "pie",
       data: {
         labels,
-        datasets: [{
-          data: dados,
-          backgroundColor: cores,
-          borderWidth: 1
-        }]
+        datasets: [
+          {
+            data: dados,
+            backgroundColor: cores,
+            borderWidth: 1
+          }
+        ]
       },
       options: {
         responsive: true,
@@ -461,6 +587,33 @@ function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
         plugins: {
           legend: {
             position: "bottom"
+          },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const label = context.label || "";
+                const value = context.parsed;
+                const dataArr = context.dataset.data || [];
+                const total = dataArr.reduce(
+                  (acc, v) => acc + Number(v || 0),
+                  0
+                );
+                const perc =
+                  total > 0
+                    ? ((value / total) * 100).toFixed(1) + "%"
+                    : "0%";
+                return `${label}: ${value} un. (${perc})`;
+              }
+            }
+          },
+          // opções do plugin de linhas de chamada
+          pieCallout: {
+            color: "#666",
+            lineWidth: 1,
+            font: "12px Arial",
+            textColor: "#333",
+            labelOffset: 6,
+            extraRadius: 18
           }
         }
       }
@@ -479,16 +632,14 @@ function aplicarFiltrosEmMemoria() {
   const formaFiltro = filterFormaSelect.value;
 
   // 1) cria cópia e ordena por dataTimestamp em ordem crescente
-  const baseOrdenada = ultimasVendasCache
-    .slice()
-    .sort((a, b) => {
-      const ta = a.dataTimestamp || 0;
-      const tb = b.dataTimestamp || 0;
-      return ta - tb; // mais antigo em cima, mais novo embaixo
-    });
+  const baseOrdenada = ultimasVendasCache.slice().sort((a, b) => {
+    const ta = a.dataTimestamp || 0;
+    const tb = b.dataTimestamp || 0;
+    return ta - tb; // mais antigo em cima, mais novo embaixo
+  });
 
   // 2) aplica filtros sobre essa lista ordenada
-  return baseOrdenada.filter(v => {
+  return baseOrdenada.filter((v) => {
     if (start && v.data && v.data < start) return false;
     if (end && v.data && v.data > end) return false;
     if (clienteFiltro && v.clienteId !== clienteFiltro) return false;
@@ -502,7 +653,8 @@ function renderizarVendasFiltradas() {
   const vendasFiltradas = aplicarFiltrosEmMemoria();
 
   if (vendasFiltradas.length === 0) {
-    salesTbody.innerHTML = '<tr><td colspan="11">Nenhuma venda no filtro.</td></tr>';
+    salesTbody.innerHTML =
+      '<tr><td colspan="11">Nenhuma venda no filtro.</td></tr>';
     salesTotalLabel.textContent = "R$ 0,00";
     atualizarKPIsVazios();
     atualizarGraficoFaturamentoMensal([]);
@@ -524,7 +676,7 @@ function renderizarVendasFiltradas() {
   const mapaFormaValor = {};
   const mapaCidadeValor = {};
 
-  vendasFiltradas.forEach(v => {
+  vendasFiltradas.forEach((v) => {
     const valor = Number(v.valorTotal || 0);
     const qtd = Number(v.quantidade || 0);
     totalValor += valor;
@@ -636,9 +788,10 @@ function renderizarVendasFiltradas() {
       topCliente = nome;
     }
   }
-  kpiTopCliente.textContent = topCliente === "—"
-    ? "—"
-    : `${topCliente} (R$ ${topClienteValor.toFixed(2)})`;
+  kpiTopCliente.textContent =
+    topCliente === "—"
+      ? "—"
+      : `${topCliente} (R$ ${topClienteValor.toFixed(2)})`;
 
   let topProduto = "—";
   let topProdutoQtd = 0;
@@ -648,9 +801,10 @@ function renderizarVendasFiltradas() {
       topProduto = desc;
     }
   }
-  kpiTopProduto.textContent = topProduto === "—"
-    ? "—"
-    : `${topProduto} (${topProdutoQtd} un.)`;
+  kpiTopProduto.textContent =
+    topProduto === "—"
+      ? "—"
+      : `${topProduto} (${topProdutoQtd} un.)`;
 
   let topCidade = "—";
   let topCidadeValor = 0;
@@ -660,29 +814,10 @@ function renderizarVendasFiltradas() {
       topCidade = cid;
     }
   }
-  kpiTopCidade.textContent = topCidade === "—"
-    ? "—"
-    : `${topCidade} (R$ ${topCidadeValor.toFixed(2)})`;
-
-  // ===== NOVOS KPIs =====
-  if (kpiTicketMedio) {
-    if (totalPedidos > 0) {
-      const ticket = totalValor / totalPedidos;
-      kpiTicketMedio.textContent = `R$ ${ticket.toFixed(2)}`;
-    } else {
-      kpiTicketMedio.textContent = "R$ 0,00";
-    }
-  }
-
-  if (kpiClientesUnicos) {
-    const numClientesUnicos = Object.keys(mapaClienteValor).length;
-    kpiClientesUnicos.textContent = String(numClientesUnicos);
-  }
-
-  if (kpiCidadesAtendidas) {
-    const cidadesValidas = Object.keys(mapaCidadeValor).filter(c => c && c.trim() !== "");
-    kpiCidadesAtendidas.textContent = String(cidadesValidas.length);
-  }
+  kpiTopCidade.textContent =
+    topCidade === "—"
+      ? "—"
+      : `${topCidade} (R$ ${topCidadeValor.toFixed(2)})`;
 
   atualizarTabelasDetalhe(
     mapaProdutoQtd,
@@ -698,7 +833,9 @@ function renderizarVendasFiltradas() {
 }
 
 async function excluirVenda(vendaId) {
-  const confirmar = window.confirm("Tem certeza que deseja excluir esta venda?");
+  const confirmar = window.confirm(
+    "Tem certeza que deseja excluir esta venda?"
+  );
   if (!confirmar) return;
 
   try {
@@ -746,7 +883,7 @@ exportCsvButton.addEventListener("click", () => {
   ].join(";");
   linhas.push(cabecalho);
 
-  filtradas.forEach(v => {
+  filtradas.forEach((v) => {
     const linha = [
       csvValue(formatarDataBrasil(v.data || "")),
       csvValue(v.clienteNome || ""),
@@ -756,8 +893,12 @@ exportCsvButton.addEventListener("click", () => {
       csvValue(v.formaDescricao || ""),
       csvValue(v.formaId || ""),
       csvValue(v.quantidade != null ? v.quantidade : ""),
-      csvValue(v.valorUnitario != null ? v.valorUnitario.toFixed(2) : ""),
-      csvValue(v.valorTotal != null ? v.valorTotal.toFixed(2) : ""),
+      csvValue(
+        v.valorUnitario != null ? v.valorUnitario.toFixed(2) : ""
+      ),
+      csvValue(
+        v.valorTotal != null ? v.valorTotal.toFixed(2) : ""
+      ),
       csvValue(v.lote || ""),
       csvValue(v.numeroNota || ""),
       csvValue(v.serieNota || ""),
@@ -767,7 +908,9 @@ exportCsvButton.addEventListener("click", () => {
   });
 
   const csvContent = linhas.join("\n");
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;"
+  });
 
   const hoje = new Date().toISOString().slice(0, 10);
   const fileName = `vendas_filtradas_${hoje}.csv`;
@@ -892,7 +1035,7 @@ saveSaleButton.addEventListener("click", async () => {
       // 1) Salva a venda do item
       await db.collection("vendas").add({
         usuarioId: user.uid,
-        data: dataStr,              // continua salvo em ISO (aaaa-mm-dd)
+        data: dataStr, // continua salvo em ISO (aaaa-mm-dd)
         dataTimestamp,
         clienteId,
         clienteNome: cliente.nome || "",
@@ -919,7 +1062,10 @@ saveSaleButton.addEventListener("click", async () => {
         typeof ajustarSaldoEstoque === "function"
       ) {
         try {
-          const saldoAtual = await obterSaldoEstoque(item.produtoId, lote);
+          const saldoAtual = await obterSaldoEstoque(
+            item.produtoId,
+            lote
+          );
 
           // só tenta baixar se tiver saldo positivo
           if (saldoAtual > 0) {
@@ -961,7 +1107,10 @@ saveSaleButton.addEventListener("click", async () => {
       try {
         await carregarEstoqueSaldos();
       } catch (e) {
-        console.error("Erro ao atualizar saldos de estoque após venda:", e);
+        console.error(
+          "Erro ao atualizar saldos de estoque após venda:",
+          e
+        );
       }
     }
   } catch (e) {
