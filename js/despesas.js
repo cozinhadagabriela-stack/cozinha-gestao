@@ -4,14 +4,31 @@
 window.fornecedoresMap = window.fornecedoresMap || {};
 let despesasCache = [];
 
+// Itens de despesa (por fornecedor)
+let itensDespesasCache = [];
+let itensDespesasMap = {};
+let itensPorFornecedorMap = {};
+
 // Referências da parte de fornecedores
 const fornNomeInput        = document.getElementById("forn-nome");
 const btnSaveFornecedor    = document.getElementById("btn-save-fornecedor");
 const fornMessage          = document.getElementById("forn-message");
 const fornecedoresTbody    = document.getElementById("fornecedores-tbody");
 
+// Referências da parte de itens de despesa (cadastro)
+const itemFornecedorSelect  = document.getElementById("item-fornecedor");
+const itemDescricaoInput    = document.getElementById("item-descricao");
+const itemCategoriaSelect   = document.getElementById("item-categoria");
+const itemUnidadeInput      = document.getElementById("item-unidade");
+const itemCodBarrasInput    = document.getElementById("item-cod-barras");
+const itemPrecoPadraoInput  = document.getElementById("item-preco-padrao");
+const btnSaveItemDespesa    = document.getElementById("btn-save-item-despesa");
+const itemMessage           = document.getElementById("item-message");
+const itensDespesaTbody     = document.getElementById("itens-despesas-tbody");
+
 // Referências da parte de despesas (lançamento)
 const despFornecedorSelect = document.getElementById("desp-fornecedor");
+const despItemSelect       = document.getElementById("desp-item");
 const despQtdInput         = document.getElementById("desp-quantidade");
 const despDescInput        = document.getElementById("desp-descricao");
 const despMarcaInput       = document.getElementById("desp-marca");
@@ -125,6 +142,10 @@ async function carregarFornecedores() {
     if (despFilterFornecedorSelect) {
       despFilterFornecedorSelect.innerHTML = filterOptionsHtml;
     }
+    // select de fornecedor do cadastro de itens
+    if (itemFornecedorSelect) {
+      itemFornecedorSelect.innerHTML = optionsHtml;
+    }
   } catch (e) {
     console.error("Erro ao carregar fornecedores:", e);
     if (fornMessage) {
@@ -159,6 +180,7 @@ async function salvarFornecedor() {
       fornMessage.className = "msg ok";
     }
     await carregarFornecedores();
+    // Itens continuam válidos, não precisa recarregar aqui
   } catch (e) {
     console.error("Erro ao salvar fornecedor:", e);
     if (fornMessage) {
@@ -177,6 +199,7 @@ async function excluirFornecedor(id) {
   try {
     await db.collection("fornecedores").doc(id).delete();
     await carregarFornecedores();
+    // Opcionalmente, você pode depois excluir/ajustar itens ligados a esse fornecedor
   } catch (e) {
     console.error("Erro ao excluir fornecedor:", e);
     alert("Erro ao excluir fornecedor.");
@@ -185,6 +208,273 @@ async function excluirFornecedor(id) {
 
 if (btnSaveFornecedor) {
   btnSaveFornecedor.addEventListener("click", salvarFornecedor);
+}
+
+// ----------------------
+// Cadastro de itens de despesa
+// ----------------------
+async function carregarItensDespesas() {
+  if (!db || !itensDespesaTbody) return;
+
+  try {
+    const snap = await db
+      .collection("itensDespesas")
+      .orderBy("descricao")
+      .get();
+
+    itensDespesasCache = [];
+    itensDespesasMap = {};
+    itensPorFornecedorMap = {};
+    itensDespesaTbody.innerHTML = "";
+
+    if (snap.empty) {
+      itensDespesaTbody.innerHTML =
+        '<tr><td colspan="7">Nenhum item cadastrado.</td></tr>';
+    } else {
+      snap.forEach((doc) => {
+        const dados = doc.data();
+        const item = {
+          id: doc.id,
+          fornecedorId: dados.fornecedorId || "",
+          fornecedorNome: dados.fornecedorNome || "",
+          descricao: dados.descricao || "",
+          categoria: dados.categoria || "",
+          unidade: dados.unidade || "",
+          codigoBarras: dados.codigoBarras || "",
+          precoPadrao:
+            typeof dados.precoPadrao === "number" ? dados.precoPadrao : null,
+        };
+
+        itensDespesasCache.push(item);
+        itensDespesasMap[item.id] = item;
+
+        if (!itensPorFornecedorMap[item.fornecedorId]) {
+          itensPorFornecedorMap[item.fornecedorId] = [];
+        }
+        itensPorFornecedorMap[item.fornecedorId].push(item);
+
+        // Monta linha na tabela
+        const tr = document.createElement("tr");
+
+        const tdForn = document.createElement("td");
+        tdForn.textContent = item.fornecedorNome;
+        tr.appendChild(tdForn);
+
+        const tdDesc = document.createElement("td");
+        tdDesc.textContent = item.descricao;
+        tr.appendChild(tdDesc);
+
+        const tdCat = document.createElement("td");
+        tdCat.textContent = item.categoria || "";
+        tr.appendChild(tdCat);
+
+        const tdUnd = document.createElement("td");
+        tdUnd.textContent = item.unidade || "";
+        tr.appendChild(tdUnd);
+
+        const tdCod = document.createElement("td");
+        tdCod.textContent = item.codigoBarras || "";
+        tr.appendChild(tdCod);
+
+        const tdPreco = document.createElement("td");
+        tdPreco.textContent =
+          item.precoPadrao != null ? item.precoPadrao.toFixed(2) : "";
+        tr.appendChild(tdPreco);
+
+        const tdAcoes = document.createElement("td");
+        const btnExcluir = document.createElement("button");
+        btnExcluir.textContent = "Excluir";
+        btnExcluir.className = "btn-small btn-danger";
+        btnExcluir.addEventListener("click", () => excluirItemDespesa(item.id));
+        tdAcoes.appendChild(btnExcluir);
+        tr.appendChild(tdAcoes);
+
+        itensDespesaTbody.appendChild(tr);
+      });
+    }
+
+    // Atualiza o select de itens no lançamento de despesas
+    const fornecedorAtual = despFornecedorSelect?.value || "";
+    if (fornecedorAtual) {
+      atualizarSelectItensFornecedor(fornecedorAtual);
+    } else if (despItemSelect) {
+      despItemSelect.innerHTML =
+        '<option value="">Selecione um item (opcional)</option>';
+    }
+  } catch (e) {
+    console.error("Erro ao carregar itens de despesa:", e);
+    if (itensDespesaTbody) {
+      itensDespesaTbody.innerHTML =
+        '<tr><td colspan="7">Erro ao carregar itens.</td></tr>';
+    }
+  }
+}
+
+async function salvarItemDespesa() {
+  if (!itemFornecedorSelect || !db) return;
+
+  const fornecedorId = itemFornecedorSelect.value;
+  const descricao = (itemDescricaoInput?.value || "").trim();
+  const categoria = itemCategoriaSelect?.value || "";
+  const unidade   = (itemUnidadeInput?.value || "").trim();
+  const codigoBarras = (itemCodBarrasInput?.value || "").trim();
+  const precoStr  = itemPrecoPadraoInput?.value || "";
+  const precoPadrao =
+    precoStr !== "" ? Number(precoStr) : null;
+
+  if (itemMessage) {
+    itemMessage.textContent = "";
+    itemMessage.className = "msg";
+  }
+
+  if (!fornecedorId || !descricao) {
+    if (itemMessage) {
+      itemMessage.textContent =
+        "Selecione um fornecedor e informe a descrição do item.";
+      itemMessage.className = "msg error";
+    }
+    return;
+  }
+
+  const fornecedor = fornecedoresMap[fornecedorId] || {};
+  const fornecedorNome = fornecedor.nome || "";
+
+  try {
+    await db.collection("itensDespesas").add({
+      fornecedorId,
+      fornecedorNome,
+      descricao,
+      categoria,
+      unidade,
+      codigoBarras,
+      precoPadrao:
+        precoPadrao != null && !isNaN(precoPadrao) ? precoPadrao : null,
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+    if (itemMessage) {
+      itemMessage.textContent = "Item salvo com sucesso!";
+      itemMessage.className = "msg ok";
+    }
+
+    // Limpa campos
+    itemDescricaoInput.value = "";
+    if (itemCategoriaSelect) itemCategoriaSelect.value = "";
+    itemUnidadeInput.value = "";
+    itemCodBarrasInput.value = "";
+    itemPrecoPadraoInput.value = "";
+
+    await carregarItensDespesas();
+  } catch (e) {
+    console.error("Erro ao salvar item de despesa:", e);
+    if (itemMessage) {
+      itemMessage.textContent = "Erro ao salvar item.";
+      itemMessage.className = "msg error";
+    }
+  }
+}
+
+async function excluirItemDespesa(id) {
+  const confirmar = window.confirm(
+    "Tem certeza que deseja excluir este item de despesa?"
+  );
+  if (!confirmar) return;
+
+  try {
+    await db.collection("itensDespesas").doc(id).delete();
+    await carregarItensDespesas();
+  } catch (e) {
+    console.error("Erro ao excluir item de despesa:", e);
+    alert("Erro ao excluir item de despesa.");
+  }
+}
+
+if (btnSaveItemDespesa) {
+  btnSaveItemDespesa.addEventListener("click", salvarItemDespesa);
+}
+
+// Atualiza o select de itens no lançamento, conforme o fornecedor
+function atualizarSelectItensFornecedor(fornecedorId) {
+  if (!despItemSelect) return;
+
+  despItemSelect.innerHTML =
+    '<option value="">Selecione um item (opcional)</option>';
+
+  const lista = itensPorFornecedorMap[fornecedorId] || [];
+  if (lista.length === 0) {
+    // Mesmo sem itens, coloca opção "Outro item..."
+    const optOutro = document.createElement("option");
+    optOutro.value = "OUTRO";
+    optOutro.textContent = "Outro item...";
+    despItemSelect.appendChild(optOutro);
+    return;
+  }
+
+  const ordenada = [...lista].sort((a, b) =>
+    (a.descricao || "").localeCompare(b.descricao || "")
+  );
+
+  ordenada.forEach((item) => {
+    const opt = document.createElement("option");
+    opt.value = item.id;
+    opt.textContent = item.descricao;
+    despItemSelect.appendChild(opt);
+  });
+
+  const optOutro = document.createElement("option");
+  optOutro.value = "OUTRO";
+  optOutro.textContent = "Outro item...";
+  despItemSelect.appendChild(optOutro);
+}
+
+// Quando trocar o fornecedor no lançamento, recarrega os itens
+if (despFornecedorSelect) {
+  despFornecedorSelect.addEventListener("change", () => {
+    const fornecedorId = despFornecedorSelect.value || "";
+    atualizarSelectItensFornecedor(fornecedorId);
+
+    // Sempre que troca o fornecedor, reseta campos do item
+    if (despItemSelect) despItemSelect.value = "";
+    if (despDescInput) {
+      despDescInput.value = "";
+      despDescInput.readOnly = false;
+    }
+    if (despValorUnitInput) despValorUnitInput.value = "";
+    atualizarTotalDespesa();
+  });
+}
+
+// Quando escolher um item, preenche descrição e, se tiver, preço padrão
+if (despItemSelect) {
+  despItemSelect.addEventListener("change", () => {
+    const itemId = despItemSelect.value;
+
+    if (!itemId || itemId === "OUTRO") {
+      // Libera edição da descrição se for "outro"
+      if (despDescInput) {
+        despDescInput.readOnly = false;
+      }
+      return;
+    }
+
+    const item = itensDespesasMap[itemId];
+    if (!item) return;
+
+    if (despDescInput) {
+      despDescInput.value = item.descricao || "";
+      despDescInput.readOnly = true;
+    }
+
+    if (
+      item.precoPadrao != null &&
+      !isNaN(item.precoPadrao) &&
+      despValorUnitInput
+    ) {
+      despValorUnitInput.value = Number(item.precoPadrao).toFixed(2);
+    }
+
+    atualizarTotalDespesa();
+  });
 }
 
 // ----------------------
@@ -230,6 +520,8 @@ async function carregarDespesas() {
       if (despesasTotalLabel) {
         despesasTotalLabel.textContent = formatarMoedaBR(0);
       }
+      // Mesmo sem despesas, ainda assim carrega os itens
+      await carregarItensDespesas();
       return;
     }
 
@@ -255,6 +547,8 @@ async function carregarDespesas() {
     );
 
     renderizarDespesas(despesasCache);
+    // Carrega/atualiza também os itens de despesa
+    await carregarItensDespesas();
   } catch (e) {
     console.error("Erro ao carregar despesas:", e);
     despesasTbody.innerHTML =
@@ -451,6 +745,7 @@ async function salvarDespesa() {
   }
 
   const fornecedorId = despFornecedorSelect.value;
+  const itemId       = despItemSelect?.value || "";
   const quantidade   = Number(despQtdInput?.value || 0);
   const descricao    = (despDescInput?.value || "").trim();
   const marca        = (despMarcaInput?.value || "").trim();
@@ -464,10 +759,10 @@ async function salvarDespesa() {
     despMessage.className = "msg";
   }
 
+  // Marca agora é OPCIONAL. Item também é opcional.
   if (
     !fornecedorId ||
     !descricao ||
-    !marca ||
     !dataPag ||
     quantidade <= 0 ||
     valorUnit <= 0 ||
@@ -476,7 +771,7 @@ async function salvarDespesa() {
   ) {
     if (despMessage) {
       despMessage.textContent =
-        "Preencha fornecedor, quantidade, descrição, marca, data, valores e forma de pagamento.";
+        "Preencha fornecedor, quantidade, descrição, data, valores e forma de pagamento.";
       despMessage.className = "msg error";
     }
     return;
@@ -489,6 +784,11 @@ async function salvarDespesa() {
     ? (formasMap[formaId] || {})
     : {};
   const formaDescricao = forma.descricao || "";
+
+  let itemInfo = null;
+  if (itemId && itemId !== "OUTRO" && itensDespesasMap[itemId]) {
+    itemInfo = itensDespesasMap[itemId];
+  }
 
   try {
     const dataTimestamp = new Date(dataPag).getTime();
@@ -506,6 +806,12 @@ async function salvarDespesa() {
       valorTotal,
       formaId,
       formaDescricao,
+      // Ligação com item de despesa (se houver)
+      itemDespesaId: itemInfo ? itemInfo.id : null,
+      itemDespesaDescricao: itemInfo ? itemInfo.descricao : null,
+      itemDespesaCategoria: itemInfo ? itemInfo.categoria : null,
+      itemDespesaUnidade: itemInfo ? itemInfo.unidade : null,
+      itemDespesaCodBarras: itemInfo ? itemInfo.codigoBarras : null,
       criadoEm: firebase.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -516,8 +822,12 @@ async function salvarDespesa() {
 
     // limpa campos
     despFornecedorSelect.value = "";
+    if (despItemSelect) despItemSelect.value = "";
     if (despQtdInput) despQtdInput.value = "1";
-    if (despDescInput) despDescInput.value = "";
+    if (despDescInput) {
+      despDescInput.value = "";
+      despDescInput.readOnly = false;
+    }
     if (despMarcaInput) despMarcaInput.value = "";
     if (despDataInput) despDataInput.value = "";
     if (despValorUnitInput) despValorUnitInput.value = "";
