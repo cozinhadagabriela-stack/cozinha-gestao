@@ -9,6 +9,18 @@ if (typeof ultimasVendasCache === "undefined") {
 const pedidoItensTbody = document.getElementById("pedido-itens-tbody");
 const btnAddItem = document.getElementById("btn-add-item");
 
+// NOVOS ELEMENTOS DE KPI
+const kpiTicketMedio = document.getElementById("kpi-ticket-medio");
+const kpiClientesUnicos = document.getElementById("kpi-clientes-unicos");
+const kpiCidadesAtendidas = document.getElementById("kpi-cidades-atendidas");
+
+// ELEMENTOS DOS GRÁFICOS
+const faturamentoMensalCanvas = document.getElementById("chart-faturamento-mensal");
+const produtosCanvas = document.getElementById("chart-produtos");
+
+let chartFaturamentoMensal = null;
+let chartProdutos = null;
+
 // ====== FUNÇÕES AUXILIARES (GERAIS) ======
 
 // Formata "aaaa-mm-dd" -> "dd/mm/aaaa"
@@ -216,6 +228,17 @@ async function carregarUltimasVendas() {
   }
 }
 
+function limparGraficos() {
+  if (chartFaturamentoMensal) {
+    chartFaturamentoMensal.destroy();
+    chartFaturamentoMensal = null;
+  }
+  if (chartProdutos) {
+    chartProdutos.destroy();
+    chartProdutos = null;
+  }
+}
+
 function atualizarKPIsVazios() {
   kpiTotalVendas.textContent = "R$ 0,00";
   kpiQtdVendida.textContent = "0";
@@ -224,9 +247,15 @@ function atualizarKPIsVazios() {
   kpiTopProduto.textContent = "—";
   kpiTopCidade.textContent = "—";
 
+  if (kpiTicketMedio) kpiTicketMedio.textContent = "R$ 0,00";
+  if (kpiClientesUnicos) kpiClientesUnicos.textContent = "0";
+  if (kpiCidadesAtendidas) kpiCidadesAtendidas.textContent = "0";
+
   kpiProdutosBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
   kpiFormasBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
   kpiCidadesBody.innerHTML = '<tr><td colspan="2">Sem dados.</td></tr>';
+
+  limparGraficos();
 }
 
 function atualizarTabelasDetalhe(
@@ -312,9 +341,112 @@ function atualizarTabelasDetalhe(
   }
 }
 
+// ====== GRÁFICOS (FATURAMENTO MENSAL + PRODUTOS) ======
+
+function atualizarGraficos(mapaMesValor, mapaProdutoQtd) {
+  if (typeof Chart === "undefined") {
+    return; // Chart.js não carregado
+  }
+
+  // ----- Faturamento mensal -----
+  if (faturamentoMensalCanvas) {
+    const ctx = faturamentoMensalCanvas.getContext("2d");
+
+    const chaves = Object.keys(mapaMesValor).sort((a, b) => {
+      // chaves no formato "aaaa-mm"
+      const [aAno, aMes] = a.split("-");
+      const [bAno, bMes] = b.split("-");
+      const da = new Date(Number(aAno), Number(aMes) - 1, 1).getTime();
+      const db = new Date(Number(bAno), Number(bMes) - 1, 1).getTime();
+      return da - db;
+    });
+
+    const labels = chaves.map(ch => {
+      const [ano, mes] = ch.split("-");
+      return `${mes}/${ano}`;
+    });
+
+    const valores = chaves.map(ch => mapaMesValor[ch] || 0);
+
+    if (chartFaturamentoMensal) {
+      chartFaturamentoMensal.destroy();
+    }
+
+    chartFaturamentoMensal = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Faturamento (R$)",
+            data: valores
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  }
+
+  // ----- Distribuição por produto (quantidade) -----
+  if (produtosCanvas) {
+    const ctx2 = produtosCanvas.getContext("2d");
+
+    const entries = Object.keys(mapaProdutoQtd).map(desc => ({
+      descricao: desc,
+      qtd: mapaProdutoQtd[desc] || 0
+    })).sort((a, b) => b.qtd - a.qtd);
+
+    const labels = entries.map(e => e.descricao);
+    const valores = entries.map(e => e.qtd);
+
+    if (chartProdutos) {
+      chartProdutos.destroy();
+    }
+
+    chartProdutos = new Chart(ctx2, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Quantidade vendida",
+            data: valores
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
 // ====== FILTROS EM MEMÓRIA / EXTRATO ======
 
-// >>> AQUI ESTÁ A MUDANÇA: agora ordena das datas mais antigas para as mais novas
+// agora ordena das datas mais antigas para as mais novas
 function aplicarFiltrosEmMemoria() {
   const start = filterStartInput.value;
   const end = filterEndInput.value;
@@ -359,12 +491,14 @@ function renderizarVendasFiltradas() {
   let totalPedidos = 0;
 
   const pedidosSet = new Set();
+  const clientesSet = new Set();
 
   const mapaClienteValor = {};
   const mapaProdutoQtd = {};
   const mapaProdutoValor = {};
   const mapaFormaValor = {};
   const mapaCidadeValor = {};
+  const mapaMesValor = {}; // chave "aaaa-mm" -> valor em R$
 
   vendasFiltradas.forEach(v => {
     const valor = Number(v.valorTotal || 0);
@@ -388,6 +522,10 @@ function renderizarVendasFiltradas() {
       totalPedidos += 1;
     }
 
+    if (v.clienteId) {
+      clientesSet.add(v.clienteId);
+    }
+
     const clienteNome = v.clienteNome || "";
     if (!mapaClienteValor[clienteNome]) mapaClienteValor[clienteNome] = 0;
     mapaClienteValor[clienteNome] += valor;
@@ -406,6 +544,18 @@ function renderizarVendasFiltradas() {
     const cidade = v.clienteCidade || "";
     if (!mapaCidadeValor[cidade]) mapaCidadeValor[cidade] = 0;
     mapaCidadeValor[cidade] += valor;
+
+    // agrupamento por mês (para gráfico de faturamento mensal)
+    const dataISO = v.data || "";
+    if (dataISO) {
+      const partes = dataISO.split("-");
+      if (partes.length >= 2) {
+        const [ano, mes] = partes;
+        const chaveMes = `${ano}-${mes}`;
+        if (!mapaMesValor[chaveMes]) mapaMesValor[chaveMes] = 0;
+        mapaMesValor[chaveMes] += valor;
+      }
+    }
 
     const tr = document.createElement("tr");
 
@@ -470,6 +620,23 @@ function renderizarVendasFiltradas() {
   kpiQtdVendida.textContent = String(totalQtd);
   kpiNumVendas.textContent = String(totalPedidos);
 
+  // NOVOS KPIs
+  const ticketMedio = totalPedidos > 0 ? totalValor / totalPedidos : 0;
+  if (kpiTicketMedio) {
+    kpiTicketMedio.textContent = `R$ ${ticketMedio.toFixed(2)}`;
+  }
+
+  const clientesUnicos = clientesSet.size;
+  if (kpiClientesUnicos) {
+    kpiClientesUnicos.textContent = String(clientesUnicos);
+  }
+
+  const cidadesAtendidas = Object.keys(mapaCidadeValor).filter(c => c).length;
+  if (kpiCidadesAtendidas) {
+    kpiCidadesAtendidas.textContent = String(cidadesAtendidas);
+  }
+  // FIM NOVOS KPIs
+
   let topCliente = "—";
   let topClienteValor = 0;
   for (const nome in mapaClienteValor) {
@@ -513,6 +680,9 @@ function renderizarVendasFiltradas() {
     mapaCidadeValor,
     totalValor
   );
+
+  // Atualiza gráficos com os dados do período filtrado
+  atualizarGraficos(mapaMesValor, mapaProdutoQtd);
 }
 
 async function excluirVenda(vendaId) {
