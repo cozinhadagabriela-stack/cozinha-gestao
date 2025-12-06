@@ -9,21 +9,13 @@ let itensDespesasCache = [];
 let itensDespesasMap = {};
 let itensPorFornecedorMap = {};
 
-// Charts (despesas)
-let chartDespCategorias = null;
-let chartDespFornecedores = null;
-
-// ----------------------
-// Referências de fornecedores
-// ----------------------
+// Referências da parte de fornecedores
 const fornNomeInput        = document.getElementById("forn-nome");
 const btnSaveFornecedor    = document.getElementById("btn-save-fornecedor");
 const fornMessage          = document.getElementById("forn-message");
 const fornecedoresTbody    = document.getElementById("fornecedores-tbody");
 
-// ----------------------
 // Referências da parte de itens de despesa (cadastro)
-// ----------------------
 const itemFornecedorSelect  = document.getElementById("item-fornecedor");
 const itemDescricaoInput    = document.getElementById("item-descricao");
 const itemCategoriaSelect   = document.getElementById("item-categoria");
@@ -34,9 +26,7 @@ const btnSaveItemDespesa    = document.getElementById("btn-save-item-despesa");
 const itemMessage           = document.getElementById("item-message");
 const itensDespesaTbody     = document.getElementById("itens-despesas-tbody");
 
-// ----------------------
 // Referências da parte de despesas (lançamento)
-// ----------------------
 const despFornecedorSelect = document.getElementById("desp-fornecedor");
 const despItemSelect       = document.getElementById("desp-item");
 const despQtdInput         = document.getElementById("desp-quantidade");
@@ -50,12 +40,11 @@ const btnSaveDespesa       = document.getElementById("btn-save-despesa");
 const despMessage          = document.getElementById("desp-message");
 const despesasTbody        = document.getElementById("despesas-tbody");
 
-// ----------------------
 // Referências da parte de filtros
-// ----------------------
 const despFilterStartInput       = document.getElementById("desp-filter-start");
 const despFilterEndInput         = document.getElementById("desp-filter-end");
 const despFilterFornecedorSelect = document.getElementById("desp-filter-fornecedor");
+const despFilterCategoriaSelect  = document.getElementById("desp-filter-categoria"); // NOVO
 const despFilterDescricaoInput   = document.getElementById("desp-filter-descricao");
 const despFilterMarcaInput       = document.getElementById("desp-filter-marca");
 const btnDespApplyFilters        = document.getElementById("btn-desp-apply-filters");
@@ -63,28 +52,11 @@ const btnDespClearFilters        = document.getElementById("btn-desp-clear-filte
 const despesasTotalLabel         = document.getElementById("despesas-total");
 
 // ----------------------
-// Referências dos KPIs / resumos de despesas
-// ----------------------
-const kpiDespTotalEl        = document.getElementById("kpi-desp-total");
-const kpiDespMpEmbEl        = document.getElementById("kpi-desp-mp-emb");
-const kpiDespFixasEl        = document.getElementById("kpi-desp-fixas");
-const kpiDespNumLancEl      = document.getElementById("kpi-desp-num-lanc");
-const kpiDespTopFornEl      = document.getElementById("kpi-desp-top-forn");
-
-const kpiDespCategoriasTbody    = document.getElementById("kpi-desp-categorias-tbody");
-const kpiDespFornecedoresTbody  = document.getElementById("kpi-desp-fornecedores-tbody");
-
-// ----------------------
 // Utils
 // ----------------------
 function formatarMoedaBR(valor) {
   const num = Number(valor || 0);
   return "R$ " + num.toFixed(2).replace(".", ",");
-}
-
-function formatarPercent(num) {
-  const n = Number(num || 0);
-  return n.toFixed(1).replace(".", ",") + "%";
 }
 
 // Formata "aaaa-mm-dd" -> "dd/mm/aaaa"
@@ -209,6 +181,7 @@ async function salvarFornecedor() {
       fornMessage.className = "msg ok";
     }
     await carregarFornecedores();
+    // Itens continuam válidos, não precisa recarregar aqui
   } catch (e) {
     console.error("Erro ao salvar fornecedor:", e);
     if (fornMessage) {
@@ -227,6 +200,7 @@ async function excluirFornecedor(id) {
   try {
     await db.collection("fornecedores").doc(id).delete();
     await carregarFornecedores();
+    // Opcionalmente, você pode depois excluir/ajustar itens ligados a esse fornecedor
   } catch (e) {
     console.error("Erro ao excluir fornecedor:", e);
     alert("Erro ao excluir fornecedor.");
@@ -429,6 +403,7 @@ function atualizarSelectItensFornecedor(fornecedorId) {
 
   const lista = itensPorFornecedorMap[fornecedorId] || [];
   if (lista.length === 0) {
+    // Mesmo sem itens, coloca opção "Outro item..."
     const optOutro = document.createElement("option");
     optOutro.value = "OUTRO";
     optOutro.textContent = "Outro item...";
@@ -476,6 +451,7 @@ if (despItemSelect) {
     const itemId = despItemSelect.value;
 
     if (!itemId || itemId === "OUTRO") {
+      // Libera edição da descrição se for "outro"
       if (despDescInput) {
         despDescInput.readOnly = false;
       }
@@ -545,8 +521,8 @@ async function carregarDespesas() {
       if (despesasTotalLabel) {
         despesasTotalLabel.textContent = formatarMoedaBR(0);
       }
+      // Mesmo sem despesas, ainda assim carrega os itens
       await carregarItensDespesas();
-      atualizarResumoDespesas([]);
       return;
     }
 
@@ -572,8 +548,6 @@ async function carregarDespesas() {
     );
 
     renderizarDespesas(despesasCache);
-    atualizarResumoDespesas(despesasCache);
-
     // Carrega/atualiza também os itens de despesa
     await carregarItensDespesas();
   } catch (e) {
@@ -583,7 +557,6 @@ async function carregarDespesas() {
     if (despesasTotalLabel) {
       despesasTotalLabel.textContent = formatarMoedaBR(0);
     }
-    atualizarResumoDespesas([]);
   }
 }
 
@@ -611,6 +584,7 @@ function renderizarDespesas(lista) {
     const tr = document.createElement("tr");
 
     const tdData = document.createElement("td");
+    // Exibe a data em formato brasileiro
     tdData.textContent = formatarDataBrasil(d.dataPagamento || "");
     tr.appendChild(tdData);
 
@@ -673,7 +647,6 @@ function renderizarDespesas(lista) {
 function aplicarFiltrosDespesas() {
   if (!despesasCache || despesasCache.length === 0) {
     renderizarDespesas([]);
-    atualizarResumoDespesas([]);
     return;
   }
 
@@ -711,6 +684,15 @@ function aplicarFiltrosDespesas() {
     filtradas = filtradas.filter((d) => d.fornecedorId === fornecedorFiltro);
   }
 
+  // Categoria
+  const categoriaFiltro = despFilterCategoriaSelect?.value || "";
+  if (categoriaFiltro) {
+    filtradas = filtradas.filter((d) => {
+      const cat = (d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria";
+      return cat === categoriaFiltro;
+    });
+  }
+
   // Descrição (contém)
   const descFiltro = (despFilterDescricaoInput?.value || "")
     .trim()
@@ -737,18 +719,18 @@ function aplicarFiltrosDespesas() {
   );
 
   renderizarDespesas(filtradas);
-  atualizarResumoDespesas(filtradas);
 }
 
 function limparFiltrosDespesas() {
   if (despFilterStartInput) despFilterStartInput.value = "";
   if (despFilterEndInput) despFilterEndInput.value = "";
   if (despFilterFornecedorSelect) despFilterFornecedorSelect.value = "";
+  if (despFilterCategoriaSelect) despFilterCategoriaSelect.value = "";
   if (despFilterDescricaoInput) despFilterDescricaoInput.value = "";
   if (despFilterMarcaInput) despFilterMarcaInput.value = "";
 
+  // volta para a lista completa (já em ordem crescente)
   renderizarDespesas(despesasCache);
-  atualizarResumoDespesas(despesasCache);
 }
 
 if (btnDespApplyFilters) {
@@ -756,316 +738,6 @@ if (btnDespApplyFilters) {
 }
 if (btnDespClearFilters) {
   btnDespClearFilters.addEventListener("click", limparFiltrosDespesas);
-}
-
-// ----------------------
-// Indicadores / resumos / gráficos de despesas
-// ----------------------
-function atualizarResumoDespesas(dados) {
-  atualizarIndicadoresDespesas(dados);
-  atualizarResumosTabelaDespesas(dados);
-  atualizarGraficosDespesas(dados);
-}
-
-function atualizarIndicadoresDespesas(dados) {
-  const lista = Array.isArray(dados) ? dados : [];
-
-  let total = 0;
-  let totalMpEmb = 0;
-  let totalFixas = 0;
-  const gastoPorFornecedor = {};
-
-  lista.forEach((d) => {
-    const v = Number(d.valorTotal || 0);
-    if (!isNaN(v)) {
-      total += v;
-    }
-
-    const cat = (d.itemDespesaCategoria || "").trim();
-    // Matéria-prima + Embalagens
-    if (cat === "Matéria-prima" || cat === "Embalagens") {
-      totalMpEmb += v;
-    }
-
-    // Despesas fixas
-    if (cat === "Despesas fixas") {
-      totalFixas += v;
-    }
-
-    const fornNome = (d.fornecedorNome || "—").trim();
-    if (!gastoPorFornecedor[fornNome]) {
-      gastoPorFornecedor[fornNome] = 0;
-    }
-    gastoPorFornecedor[fornNome] += v;
-  });
-
-  // Número de lançamentos
-  const numLanc = lista.length;
-
-  // Fornecedor top
-  let topFornNome = "—";
-  let topFornValor = 0;
-  Object.entries(gastoPorFornecedor).forEach(([nome, valor]) => {
-    if (valor > topFornValor) {
-      topFornValor = valor;
-      topFornNome = nome;
-    }
-  });
-
-  if (kpiDespTotalEl) {
-    kpiDespTotalEl.textContent = formatarMoedaBR(total);
-  }
-  if (kpiDespMpEmbEl) {
-    kpiDespMpEmbEl.textContent = formatarMoedaBR(totalMpEmb);
-  }
-  if (kpiDespFixasEl) {
-    kpiDespFixasEl.textContent = formatarMoedaBR(totalFixas);
-  }
-  if (kpiDespNumLancEl) {
-    kpiDespNumLancEl.textContent = String(numLanc);
-  }
-  if (kpiDespTopFornEl) {
-    if (topFornValor > 0) {
-      kpiDespTopFornEl.textContent =
-        `${topFornNome} (${formatarMoedaBR(topFornValor)})`;
-    } else {
-      kpiDespTopFornEl.textContent = "—";
-    }
-  }
-}
-
-function atualizarResumosTabelaDespesas(dados) {
-  const lista = Array.isArray(dados) ? dados : [];
-
-  if (kpiDespCategoriasTbody) {
-    kpiDespCategoriasTbody.innerHTML = "";
-  }
-  if (kpiDespFornecedoresTbody) {
-    kpiDespFornecedoresTbody.innerHTML = "";
-  }
-
-  if (!lista.length) {
-    if (kpiDespCategoriasTbody) {
-      kpiDespCategoriasTbody.innerHTML =
-        '<tr><td colspan="3">Sem dados.</td></tr>';
-    }
-    if (kpiDespFornecedoresTbody) {
-      kpiDespFornecedoresTbody.innerHTML =
-        '<tr><td colspan="3">Sem dados.</td></tr>';
-    }
-    return;
-  }
-
-  let total = 0;
-  const porCategoria = {};
-  const porFornecedor = {};
-
-  lista.forEach((d) => {
-    const v = Number(d.valorTotal || 0);
-    if (isNaN(v)) return;
-    total += v;
-
-    const cat = (d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria";
-    if (!porCategoria[cat]) porCategoria[cat] = 0;
-    porCategoria[cat] += v;
-
-    const forn = (d.fornecedorNome || "—").trim();
-    if (!porFornecedor[forn]) porFornecedor[forn] = 0;
-    porFornecedor[forn] += v;
-  });
-
-  // Tabela por categoria
-  if (kpiDespCategoriasTbody) {
-    const entriesCat = Object.entries(porCategoria)
-      .sort((a, b) => b[1] - a[1]);
-
-    entriesCat.forEach(([cat, valor]) => {
-      const perc = total > 0 ? (valor / total) * 100 : 0;
-      const tr = document.createElement("tr");
-
-      const tdCat = document.createElement("td");
-      tdCat.textContent = cat;
-      tr.appendChild(tdCat);
-
-      const tdVal = document.createElement("td");
-      tdVal.textContent = formatarMoedaBR(valor);
-      tr.appendChild(tdVal);
-
-      const tdPerc = document.createElement("td");
-      tdPerc.textContent = formatarPercent(perc);
-      tr.appendChild(tdPerc);
-
-      kpiDespCategoriasTbody.appendChild(tr);
-    });
-
-    if (!entriesCat.length) {
-      kpiDespCategoriasTbody.innerHTML =
-        '<tr><td colspan="3">Sem dados.</td></tr>';
-    }
-  }
-
-  // Tabela por fornecedor (top 10)
-  if (kpiDespFornecedoresTbody) {
-    const entriesForn = Object.entries(porFornecedor)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
-
-    entriesForn.forEach(([forn, valor]) => {
-      const perc = total > 0 ? (valor / total) * 100 : 0;
-      const tr = document.createElement("tr");
-
-      const tdForn = document.createElement("td");
-      tdForn.textContent = forn;
-      tr.appendChild(tdForn);
-
-      const tdVal = document.createElement("td");
-      tdVal.textContent = formatarMoedaBR(valor);
-      tr.appendChild(tdVal);
-
-      const tdPerc = document.createElement("td");
-      tdPerc.textContent = formatarPercent(perc);
-      tr.appendChild(tdPerc);
-
-      kpiDespFornecedoresTbody.appendChild(tr);
-    });
-
-    if (!entriesForn.length) {
-      kpiDespFornecedoresTbody.innerHTML =
-        '<tr><td colspan="3">Sem dados.</td></tr>';
-    }
-  }
-}
-
-function atualizarGraficosDespesas(dados) {
-  const lista = Array.isArray(dados) ? dados : [];
-
-  const catCanvas = document.getElementById("chart-desp-categorias");
-  const fornCanvas = document.getElementById("chart-desp-fornecedores");
-
-  if (!catCanvas && !fornCanvas) return;
-
-  let total = 0;
-  const porCategoria = {};
-  const porFornecedor = {};
-
-  lista.forEach((d) => {
-    const v = Number(d.valorTotal || 0);
-    if (isNaN(v)) return;
-    total += v;
-
-    const cat = (d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria";
-    if (!porCategoria[cat]) porCategoria[cat] = 0;
-    porCategoria[cat] += v;
-
-    const forn = (d.fornecedorNome || "—").trim();
-    if (!porFornecedor[forn]) porFornecedor[forn] = 0;
-    porFornecedor[forn] += v;
-  });
-
-  // ---- Gráfico de pizza por categoria ----
-  if (catCanvas) {
-    const ctxCat = catCanvas.getContext("2d");
-
-    if (chartDespCategorias) {
-      chartDespCategorias.destroy();
-      chartDespCategorias = null;
-    }
-
-    const labelsCat = Object.keys(porCategoria);
-    const valoresCat = Object.values(porCategoria);
-
-    if (labelsCat.length && total > 0) {
-      chartDespCategorias = new Chart(ctxCat, {
-        type: "doughnut",
-        data: {
-          labels: labelsCat,
-          datasets: [
-            {
-              data: valoresCat,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              position: "bottom",
-            },
-            tooltip: {
-              callbacks: {
-                label: function (context) {
-                  const v = context.parsed || 0;
-                  const perc = total > 0 ? (v / total) * 100 : 0;
-                  return `${context.label}: ${formatarMoedaBR(v)} (${formatarPercent(
-                    perc
-                  )})`;
-                },
-              },
-            },
-          },
-        },
-      });
-    } else {
-      // Se não tiver dados, deixa em branco
-      catCanvas.getContext("2d").clearRect(0, 0, catCanvas.width, catCanvas.height);
-    }
-  }
-
-  // ---- Gráfico de barras por fornecedor (Top 5) ----
-  if (fornCanvas) {
-    const ctxForn = fornCanvas.getContext("2d");
-
-    if (chartDespFornecedores) {
-      chartDespFornecedores.destroy();
-      chartDespFornecedores = null;
-    }
-
-    const entriesForn = Object.entries(porFornecedor)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-
-    const labelsForn = entriesForn.map(([nome]) => nome);
-    const valoresForn = entriesForn.map(([, valor]) => valor);
-
-    if (labelsForn.length && total > 0) {
-      chartDespFornecedores = new Chart(ctxForn, {
-        type: "bar",
-        data: {
-          labels: labelsForn,
-          datasets: [
-            {
-              data: valoresForn,
-            },
-          ],
-        },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          plugins: {
-            legend: {
-              display: false,
-            },
-            tooltip: {
-              callbacks: {
-                label: function (context) {
-                  const v = context.parsed.x || 0;
-                  const perc = total > 0 ? (v / total) * 100 : 0;
-                  return `${formatarMoedaBR(v)} (${formatarPercent(perc)})`;
-                },
-              },
-            },
-          },
-          scales: {
-            x: {
-              beginAtZero: true,
-            },
-          },
-        },
-      });
-    } else {
-      fornCanvas.getContext("2d").clearRect(0, 0, fornCanvas.width, fornCanvas.height);
-    }
-  }
 }
 
 // ----------------------
@@ -1098,6 +770,7 @@ async function salvarDespesa() {
     despMessage.className = "msg";
   }
 
+  // Marca agora é OPCIONAL. Item também é opcional.
   if (
     !fornecedorId ||
     !descricao ||
@@ -1138,8 +811,8 @@ async function salvarDespesa() {
       quantidade,
       descricaoItem: descricao,
       marca,
-      dataPagamento: dataPag,
-      dataPagamentoTimestamp: dataTimestamp,
+      dataPagamento: dataPag,                 // ISO
+      dataPagamentoTimestamp: dataTimestamp,  // usado p/ ordenar
       valorUnitario: valorUnit,
       valorTotal,
       formaId,
