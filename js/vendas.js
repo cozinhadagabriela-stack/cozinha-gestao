@@ -9,17 +9,9 @@ if (typeof ultimasVendasCache === "undefined") {
 const pedidoItensTbody = document.getElementById("pedido-itens-tbody");
 const btnAddItem = document.getElementById("btn-add-item");
 
-// NOVOS ELEMENTOS DE KPI
-const kpiTicketMedio = document.getElementById("kpi-ticket-medio");
-const kpiClientesUnicos = document.getElementById("kpi-clientes-unicos");
-const kpiCidadesAtendidas = document.getElementById("kpi-cidades-atendidas");
-
-// ELEMENTOS DOS GRÁFICOS
-const faturamentoMensalCanvas = document.getElementById("chart-faturamento-mensal");
-const produtosCanvas = document.getElementById("chart-produtos");
-
+// ====== GRÁFICOS (Chart.js) ======
 let chartFaturamentoMensal = null;
-let chartProdutos = null;
+let chartDistribuicaoProdutos = null;
 
 // ====== FUNÇÕES AUXILIARES (GERAIS) ======
 
@@ -209,6 +201,8 @@ async function carregarUltimasVendas() {
     if (snapshot.empty) {
       salesTbody.innerHTML = '<tr><td colspan="11">Nenhuma venda encontrada.</td></tr>';
       atualizarKPIsVazios();
+      atualizarGraficoFaturamentoMensal([]);
+      atualizarGraficoDistribuicaoProdutos({});
       return;
     }
 
@@ -225,17 +219,8 @@ async function carregarUltimasVendas() {
     console.error("Erro ao carregar vendas:", e);
     salesTbody.innerHTML = '<tr><td colspan="11">Erro ao carregar vendas.</td></tr>';
     atualizarKPIsVazios();
-  }
-}
-
-function limparGraficos() {
-  if (chartFaturamentoMensal) {
-    chartFaturamentoMensal.destroy();
-    chartFaturamentoMensal = null;
-  }
-  if (chartProdutos) {
-    chartProdutos.destroy();
-    chartProdutos = null;
+    atualizarGraficoFaturamentoMensal([]);
+    atualizarGraficoDistribuicaoProdutos({});
   }
 }
 
@@ -247,17 +232,12 @@ function atualizarKPIsVazios() {
   kpiTopProduto.textContent = "—";
   kpiTopCidade.textContent = "—";
 
-  if (kpiTicketMedio) kpiTicketMedio.textContent = "R$ 0,00";
-  if (kpiClientesUnicos) kpiClientesUnicos.textContent = "0";
-  if (kpiCidadesAtendidas) kpiCidadesAtendidas.textContent = "0";
-
   kpiProdutosBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
   kpiFormasBody.innerHTML = '<tr><td colspan="3">Sem dados.</td></tr>';
   kpiCidadesBody.innerHTML = '<tr><td colspan="2">Sem dados.</td></tr>';
-
-  limparGraficos();
 }
 
+// Tabelas de resumo (produto, forma, cidade)
 function atualizarTabelasDetalhe(
   mapaProdutoQtd,
   mapaProdutoValor,
@@ -341,102 +321,138 @@ function atualizarTabelasDetalhe(
   }
 }
 
-// ====== GRÁFICOS (FATURAMENTO MENSAL + PRODUTOS) ======
+// ====== GRÁFICOS (FUNÇÕES) ======
 
-function atualizarGraficos(mapaMesValor, mapaProdutoQtd) {
-  if (typeof Chart === "undefined") {
-    return; // Chart.js não carregado
-  }
+// Evolução do faturamento mensal (line chart)
+function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
+  const canvas = document.getElementById("chart-faturamento-mensal");
+  if (!canvas || typeof Chart === "undefined") return;
 
-  // ----- Faturamento mensal -----
-  if (faturamentoMensalCanvas) {
-    const ctx = faturamentoMensalCanvas.getContext("2d");
-
-    const chaves = Object.keys(mapaMesValor).sort((a, b) => {
-      // chaves no formato "aaaa-mm"
-      const [aAno, aMes] = a.split("-");
-      const [bAno, bMes] = b.split("-");
-      const da = new Date(Number(aAno), Number(aMes) - 1, 1).getTime();
-      const db = new Date(Number(bAno), Number(bMes) - 1, 1).getTime();
-      return da - db;
-    });
-
-    const labels = chaves.map(ch => {
-      const [ano, mes] = ch.split("-");
-      return `${mes}/${ano}`;
-    });
-
-    const valores = chaves.map(ch => mapaMesValor[ch] || 0);
-
+  // Se não há vendas, só destrói o gráfico atual
+  if (!vendasFiltradas || vendasFiltradas.length === 0) {
     if (chartFaturamentoMensal) {
       chartFaturamentoMensal.destroy();
+      chartFaturamentoMensal = null;
     }
+    return;
+  }
 
+  const mapaMesValor = {};
+
+  vendasFiltradas.forEach(v => {
+    const dataIso = v.data || "";
+    if (!dataIso || dataIso.length < 7) return;
+    const anoMes = dataIso.slice(0, 7); // "aaaa-mm"
+    const valor = Number(v.valorTotal || 0);
+    if (!mapaMesValor[anoMes]) mapaMesValor[anoMes] = 0;
+    mapaMesValor[anoMes] += valor;
+  });
+
+  const chavesOrdenadas = Object.keys(mapaMesValor).sort(); // 2025-01, 2025-02...
+  if (chavesOrdenadas.length === 0) {
+    if (chartFaturamentoMensal) {
+      chartFaturamentoMensal.destroy();
+      chartFaturamentoMensal = null;
+    }
+    return;
+  }
+
+  const labels = chavesOrdenadas.map(ym => {
+    const [ano, mes] = ym.split("-");
+    return `${mes}/${ano}`;
+  });
+  const valores = chavesOrdenadas.map(ym => mapaMesValor[ym]);
+
+  if (chartFaturamentoMensal) {
+    chartFaturamentoMensal.data.labels = labels;
+    chartFaturamentoMensal.data.datasets[0].data = valores;
+    chartFaturamentoMensal.update();
+  } else {
+    const ctx = canvas.getContext("2d");
     chartFaturamentoMensal = new Chart(ctx, {
       type: "line",
       data: {
         labels,
-        datasets: [
-          {
-            label: "Faturamento (R$)",
-            data: valores
-          }
-        ]
+        datasets: [{
+          label: "Faturamento (R$)",
+          data: valores,
+          fill: false,
+          tension: 0.2
+        }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: false }
+          legend: {
+            display: false
+          }
         },
         scales: {
           y: {
-            beginAtZero: true
+            ticks: {
+              // simples, sem formatação de moeda aqui
+              beginAtZero: true
+            }
           }
         }
       }
     });
   }
+}
 
-  // ----- Distribuição por produto (quantidade) -----
-  if (produtosCanvas) {
-    const ctx2 = produtosCanvas.getContext("2d");
+// Pizza de distribuição de vendas por produto (por quantidade)
+function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
+  const canvas = document.getElementById("chart-produtos");
+  if (!canvas || typeof Chart === "undefined") return;
 
-    const entries = Object.keys(mapaProdutoQtd).map(desc => ({
-      descricao: desc,
-      qtd: mapaProdutoQtd[desc] || 0
-    })).sort((a, b) => b.qtd - a.qtd);
+  const entries = Object.keys(mapaProdutoQtd || {}).map(desc => ({
+    descricao: desc,
+    qtd: mapaProdutoQtd[desc] || 0
+  })).filter(e => e.qtd > 0)
+    .sort((a, b) => b.qtd - a.qtd);
 
-    const labels = entries.map(e => e.descricao);
-    const valores = entries.map(e => e.qtd);
-
-    if (chartProdutos) {
-      chartProdutos.destroy();
+  if (entries.length === 0) {
+    if (chartDistribuicaoProdutos) {
+      chartDistribuicaoProdutos.destroy();
+      chartDistribuicaoProdutos = null;
     }
+    return;
+  }
 
-    chartProdutos = new Chart(ctx2, {
-      type: "bar",
+  const labels = entries.map(e => e.descricao);
+  const dados = entries.map(e => e.qtd);
+
+  // Paleta simples de cores
+  const baseColors = [
+    "#ff6384", "#36a2eb", "#ffcd56", "#4bc0c0",
+    "#9966ff", "#ff9f40", "#8dd17e", "#ff6f91"
+  ];
+  const cores = labels.map((_, i) => baseColors[i % baseColors.length]);
+
+  if (chartDistribuicaoProdutos) {
+    chartDistribuicaoProdutos.data.labels = labels;
+    chartDistribuicaoProdutos.data.datasets[0].data = dados;
+    chartDistribuicaoProdutos.data.datasets[0].backgroundColor = cores;
+    chartDistribuicaoProdutos.update();
+  } else {
+    const ctx = canvas.getContext("2d");
+    chartDistribuicaoProdutos = new Chart(ctx, {
+      type: "pie",
       data: {
         labels,
-        datasets: [
-          {
-            label: "Quantidade vendida",
-            data: valores
-          }
-        ]
+        datasets: [{
+          data: dados,
+          backgroundColor: cores,
+          borderWidth: 1
+        }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              precision: 0
-            }
+          legend: {
+            position: "bottom"
           }
         }
       }
@@ -446,7 +462,7 @@ function atualizarGraficos(mapaMesValor, mapaProdutoQtd) {
 
 // ====== FILTROS EM MEMÓRIA / EXTRATO ======
 
-// agora ordena das datas mais antigas para as mais novas
+// Ordena das datas mais antigas para as mais novas
 function aplicarFiltrosEmMemoria() {
   const start = filterStartInput.value;
   const end = filterEndInput.value;
@@ -481,6 +497,8 @@ function renderizarVendasFiltradas() {
     salesTbody.innerHTML = '<tr><td colspan="11">Nenhuma venda no filtro.</td></tr>';
     salesTotalLabel.textContent = "R$ 0,00";
     atualizarKPIsVazios();
+    atualizarGraficoFaturamentoMensal([]);
+    atualizarGraficoDistribuicaoProdutos({});
     return;
   }
 
@@ -491,14 +509,12 @@ function renderizarVendasFiltradas() {
   let totalPedidos = 0;
 
   const pedidosSet = new Set();
-  const clientesSet = new Set();
 
   const mapaClienteValor = {};
   const mapaProdutoQtd = {};
   const mapaProdutoValor = {};
   const mapaFormaValor = {};
   const mapaCidadeValor = {};
-  const mapaMesValor = {}; // chave "aaaa-mm" -> valor em R$
 
   vendasFiltradas.forEach(v => {
     const valor = Number(v.valorTotal || 0);
@@ -522,10 +538,6 @@ function renderizarVendasFiltradas() {
       totalPedidos += 1;
     }
 
-    if (v.clienteId) {
-      clientesSet.add(v.clienteId);
-    }
-
     const clienteNome = v.clienteNome || "";
     if (!mapaClienteValor[clienteNome]) mapaClienteValor[clienteNome] = 0;
     mapaClienteValor[clienteNome] += valor;
@@ -544,18 +556,6 @@ function renderizarVendasFiltradas() {
     const cidade = v.clienteCidade || "";
     if (!mapaCidadeValor[cidade]) mapaCidadeValor[cidade] = 0;
     mapaCidadeValor[cidade] += valor;
-
-    // agrupamento por mês (para gráfico de faturamento mensal)
-    const dataISO = v.data || "";
-    if (dataISO) {
-      const partes = dataISO.split("-");
-      if (partes.length >= 2) {
-        const [ano, mes] = partes;
-        const chaveMes = `${ano}-${mes}`;
-        if (!mapaMesValor[chaveMes]) mapaMesValor[chaveMes] = 0;
-        mapaMesValor[chaveMes] += valor;
-      }
-    }
 
     const tr = document.createElement("tr");
 
@@ -620,23 +620,6 @@ function renderizarVendasFiltradas() {
   kpiQtdVendida.textContent = String(totalQtd);
   kpiNumVendas.textContent = String(totalPedidos);
 
-  // NOVOS KPIs
-  const ticketMedio = totalPedidos > 0 ? totalValor / totalPedidos : 0;
-  if (kpiTicketMedio) {
-    kpiTicketMedio.textContent = `R$ ${ticketMedio.toFixed(2)}`;
-  }
-
-  const clientesUnicos = clientesSet.size;
-  if (kpiClientesUnicos) {
-    kpiClientesUnicos.textContent = String(clientesUnicos);
-  }
-
-  const cidadesAtendidas = Object.keys(mapaCidadeValor).filter(c => c).length;
-  if (kpiCidadesAtendidas) {
-    kpiCidadesAtendidas.textContent = String(cidadesAtendidas);
-  }
-  // FIM NOVOS KPIs
-
   let topCliente = "—";
   let topClienteValor = 0;
   for (const nome in mapaClienteValor) {
@@ -681,8 +664,9 @@ function renderizarVendasFiltradas() {
     totalValor
   );
 
-  // Atualiza gráficos com os dados do período filtrado
-  atualizarGraficos(mapaMesValor, mapaProdutoQtd);
+  // Atualiza os gráficos com base nas vendas filtradas
+  atualizarGraficoFaturamentoMensal(vendasFiltradas);
+  atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd);
 }
 
 async function excluirVenda(vendaId) {
