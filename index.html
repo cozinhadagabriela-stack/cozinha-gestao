@@ -8,6 +8,9 @@
   <!-- CSS separado -->
   <link rel="stylesheet" href="styles.css" />
 
+  <!-- Chart.js para gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
   <!-- Firebase SDKs (CDN) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -211,6 +214,22 @@
               <span class="kpi-label">Número de vendas</span>
               <span class="kpi-value" id="kpi-num-vendas">0</span>
             </div>
+
+            <!-- NOVOS INDICADORES -->
+            <div class="kpi-card">
+              <span class="kpi-label">Ticket médio por venda (R$)</span>
+              <span class="kpi-value" id="kpi-ticket-medio">R$ 0,00</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Clientes atendidos (únicos)</span>
+              <span class="kpi-value" id="kpi-clientes-unicos">0</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-label">Cidades atendidas</span>
+              <span class="kpi-value" id="kpi-cidades-atendidas">0</span>
+            </div>
+            <!-- FIM NOVOS INDICADORES -->
+
             <div class="kpi-card">
               <span class="kpi-label">Cliente com maior valor em compras</span>
               <span class="kpi-value" id="kpi-top-cliente">—</span>
@@ -225,6 +244,26 @@
             </div>
           </div>
         </div>
+
+        <!-- NOVA ÁREA DE GRÁFICOS -->
+        <div class="charts-container">
+          <h4>Visão gráfica do período</h4>
+          <div class="charts-grid">
+            <div class="chart-card">
+              <h5>Evolução do faturamento mensal</h5>
+              <div class="chart-wrapper">
+                <canvas id="chart-faturamento-mensal"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <h5>Distribuição de vendas por produto</h5>
+              <div class="chart-wrapper">
+                <canvas id="chart-produtos"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- FIM GRÁFICOS -->
 
         <div class="table-wrapper">
           <table>
