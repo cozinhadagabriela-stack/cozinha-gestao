@@ -53,6 +53,29 @@ function preencherProdutosEstoque() {
 }
 
 // =============================
+// Auto-preencher código de barras ao selecionar produto
+// =============================
+function configurarAutoPreenchimentoCodigoBarras() {
+  if (!estProdutoSelect || !estCodBarrasInput) return;
+
+  estProdutoSelect.addEventListener("change", () => {
+    const produtoId = estProdutoSelect.value;
+
+    if (!produtoId || !produtosMap || !produtosMap[produtoId]) {
+      // se limpar o select, limpa o campo também
+      estCodBarrasInput.value = "";
+      return;
+    }
+
+    const produto = produtosMap[produtoId] || {};
+    estCodBarrasInput.value = produto.codigoBarras || "";
+  });
+}
+
+// chama logo ao carregar o arquivo
+configurarAutoPreenchimentoCodigoBarras();
+
+// =============================
 // Helpers de saldo no Firestore
 // coleção: "estoque"
 // docId = produtoId__LOTE ou produtoId__SEMLOTE
@@ -464,7 +487,7 @@ async function salvarMovimentoEstoqueManual() {
 
   try {
     if (emEdicao && editingEstoqueData) {
-      // ======== ATUALIZANDO UM SALDO EXISTENTE (igual "Atualizar cliente") ========
+      // ======== ATUALIZANDO UM SALDO EXISTENTE ========
       const produtoIdOrig = editingEstoqueData.produtoId;
       const loteOrig      = editingEstoqueData.lote || "";
 
