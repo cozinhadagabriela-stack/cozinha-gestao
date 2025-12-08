@@ -9,6 +9,9 @@ if (typeof ultimasVendasCache === "undefined") {
 const pedidoItensTbody = document.getElementById("pedido-itens-tbody");
 const btnAddItem = document.getElementById("btn-add-item");
 
+// NOVO: select de filtro de nota fiscal
+const filterNfSelect = document.getElementById("filter-nf");
+
 // ====== GRÁFICOS (Chart.js) ======
 let chartFaturamentoMensal = null;
 let chartDistribuicaoProdutos = null;
@@ -267,7 +270,7 @@ if (btnAddItem) {
 // ====== CARREGAR / EXTRATO / KPIs ======
 
 async function carregarUltimasVendas() {
-  salesTbody.innerHTML = '<tr><td colspan="11">Carregando...</td></tr>';
+  salesTbody.innerHTML = '<tr><td colspan="10">Carregando...</td></tr>';
   salesTotalLabel.textContent = "";
   ultimasVendasCache = [];
 
@@ -280,7 +283,7 @@ async function carregarUltimasVendas() {
 
     if (snapshot.empty) {
       salesTbody.innerHTML =
-        '<tr><td colspan="11">Nenhuma venda encontrada.</td></tr>';
+        '<tr><td colspan="10">Nenhuma venda encontrada.</td></tr>';
       atualizarKPIsVazios();
       atualizarGraficoFaturamentoMensal([]);
       atualizarGraficoDistribuicaoProdutos({});
@@ -299,7 +302,7 @@ async function carregarUltimasVendas() {
   } catch (e) {
     console.error("Erro ao carregar vendas:", e);
     salesTbody.innerHTML =
-      '<tr><td colspan="11">Erro ao carregar vendas.</td></tr>';
+      '<tr><td colspan="10">Erro ao carregar vendas.</td></tr>';
     atualizarKPIsVazios();
     atualizarGraficoFaturamentoMensal([]);
     atualizarGraficoDistribuicaoProdutos({});
@@ -630,6 +633,7 @@ function aplicarFiltrosEmMemoria() {
   const clienteFiltro = filterClientSelect.value;
   const produtoFiltro = filterProductSelect.value;
   const formaFiltro = filterFormaSelect.value;
+  const nfFiltro = filterNfSelect ? filterNfSelect.value : "";
 
   // 1) cria cópia e ordena por dataTimestamp em ordem crescente
   const baseOrdenada = ultimasVendasCache.slice().sort((a, b) => {
@@ -645,6 +649,15 @@ function aplicarFiltrosEmMemoria() {
     if (clienteFiltro && v.clienteId !== clienteFiltro) return false;
     if (produtoFiltro && v.produtoId !== produtoFiltro) return false;
     if (formaFiltro && v.formaId !== formaFiltro) return false;
+
+    // Filtro de nota fiscal
+    const temNota =
+      v.numeroNota != null &&
+      String(v.numeroNota).trim() !== "";
+
+    if (nfFiltro === "com" && !temNota) return false;
+    if (nfFiltro === "sem" && temNota) return false;
+
     return true;
   });
 }
@@ -654,7 +667,7 @@ function renderizarVendasFiltradas() {
 
   if (vendasFiltradas.length === 0) {
     salesTbody.innerHTML =
-      '<tr><td colspan="11">Nenhuma venda no filtro.</td></tr>';
+      '<tr><td colspan="10">Nenhuma venda no filtro.</td></tr>';
     salesTotalLabel.textContent = "R$ 0,00";
     atualizarKPIsVazios();
     atualizarGraficoFaturamentoMensal([]);
@@ -689,8 +702,7 @@ function renderizarVendasFiltradas() {
         v.data || "",
         v.clienteId || "",
         v.formaId || "",
-        v.numeroNota || "",
-        v.serieNota || ""
+        v.numeroNota || ""
       ].join("|");
 
     if (!pedidosSet.has(chavePedido)) {
@@ -754,10 +766,6 @@ function renderizarVendasFiltradas() {
     const nfTd = document.createElement("td");
     nfTd.textContent = v.numeroNota || "";
     tr.appendChild(nfTd);
-
-    const serieTd = document.createElement("td");
-    serieTd.textContent = v.serieNota || "";
-    tr.appendChild(serieTd);
 
     const formaTd = document.createElement("td");
     formaTd.textContent = v.formaDescricao || "";
@@ -878,7 +886,6 @@ exportCsvButton.addEventListener("click", () => {
     "ValorTotal",
     "Lote",
     "NumeroNota",
-    "SerieNota",
     "PedidoChave"
   ].join(";");
   linhas.push(cabecalho);
@@ -901,7 +908,6 @@ exportCsvButton.addEventListener("click", () => {
       ),
       csvValue(v.lote || ""),
       csvValue(v.numeroNota || ""),
-      csvValue(v.serieNota || ""),
       csvValue(v.pedidoChave || "")
     ].join(";");
     linhas.push(linha);
@@ -942,6 +948,7 @@ clearFilterButton.addEventListener("click", () => {
   filterClientSelect.value = "";
   filterProductSelect.value = "";
   filterFormaSelect.value = "";
+  if (filterNfSelect) filterNfSelect.value = "";
   renderizarVendasFiltradas();
 });
 
@@ -959,13 +966,10 @@ saveSaleButton.addEventListener("click", async () => {
   const formaId = salePaymentSelect.value;
 
   let numeroNota = (saleNfNumberInput.value || "").trim();
-  let serieNota = (saleNfSeriesInput.value || "").trim();
 
-  // Limites de tamanho
+  // Limite de tamanho
   if (numeroNota.length > 10) numeroNota = numeroNota.slice(0, 10);
-  if (serieNota.length > 5) serieNota = serieNota.slice(0, 5);
   saleNfNumberInput.value = numeroNota;
-  saleNfSeriesInput.value = serieNota;
 
   saleMessage.textContent = "";
   saleMessage.className = "msg";
@@ -1017,8 +1021,7 @@ saveSaleButton.addEventListener("click", async () => {
     dataStr || "",
     clienteId || "",
     formaId || "",
-    numeroNota || "",
-    serieNota || ""
+    numeroNota || ""
   ].join("|");
 
   try {
@@ -1047,7 +1050,6 @@ saveSaleButton.addEventListener("click", async () => {
         valorTotal,
         lote,
         numeroNota,
-        serieNota,
         formaId,
         formaDescricao: forma.descricao || "",
         pedidoChave,
@@ -1093,7 +1095,6 @@ saveSaleButton.addEventListener("click", async () => {
     saleClientSelect.value = "";
     salePaymentSelect.value = "";
     saleNfNumberInput.value = "";
-    saleNfSeriesInput.value = "";
     saleProductSelect.value = "";
     saleLoteInput.value = "";
     saleQuantityInput.value = "1";
