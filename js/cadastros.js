@@ -1,3 +1,8 @@
+// js/cadastros.js
+
+// Campo extra de código de barras do produto (input da aba Produtos)
+const prodCodBarrasInput = document.getElementById("prod-cod-barras");
+
 // ===== RENDERIZAÇÃO TABELAS DE CADASTRO =====
 function renderClientesTable() {
   if (!clientesTbody) return;
@@ -52,11 +57,13 @@ function renderProdutosTable() {
     id,
     descricao: data.descricao || "",
     peso: data.pesoGramas || 0,
-    preco: data.precoUnitario || 0
+    preco: data.precoUnitario || 0,
+    codigoBarras: data.codigoBarras || "" // NOVO CAMPO
   })).sort((a, b) => a.descricao.localeCompare(b.descricao));
 
   if (entries.length === 0) {
-    produtosTbody.innerHTML = '<tr><td colspan="4">Nenhum produto cadastrado.</td></tr>';
+    // agora são 5 colunas: descrição, peso, preço, código, ações
+    produtosTbody.innerHTML = '<tr><td colspan="5">Nenhum produto cadastrado.</td></tr>';
     return;
   }
 
@@ -74,6 +81,11 @@ function renderProdutosTable() {
     const tdPreco = document.createElement("td");
     tdPreco.textContent = p.preco.toFixed(2);
     tr.appendChild(tdPreco);
+
+    // coluna de código de barras
+    const tdCod = document.createElement("td");
+    tdCod.textContent = p.codigoBarras || "";
+    tr.appendChild(tdCod);
 
     const tdAcoes = document.createElement("td");
 
@@ -201,11 +213,16 @@ async function carregarProdutos() {
     }
 
     renderProdutosTable();
+
+    // garante que o select do estoque seja atualizado com os produtos carregados
+    if (typeof preencherProdutosEstoque === "function") {
+      preencherProdutosEstoque();
+    }
   } catch (e) {
     console.error("Erro ao carregar produtos:", e);
     saleProductSelect.innerHTML = '<option value="">Erro ao carregar produtos</option>';
     filterProductSelect.innerHTML = '<option value="">Erro ao carregar produtos</option>';
-    produtosTbody.innerHTML = '<tr><td colspan="4">Erro ao carregar produtos.</td></tr>';
+    produtosTbody.innerHTML = '<tr><td colspan="5">Erro ao carregar produtos.</td></tr>';
   }
 }
 
@@ -294,6 +311,10 @@ function iniciarEdicaoProduto(id) {
   prodDescInput.value = atual.descricao || "";
   prodPesoInput.value = atual.pesoGramas != null ? atual.pesoGramas : "";
   prodPrecoInput.value = atual.precoUnitario != null ? atual.precoUnitario : "";
+  if (prodCodBarrasInput) {
+    prodCodBarrasInput.value = atual.codigoBarras || "";
+  }
+
   editingProdutoId = id;
   saveProdutoButton.textContent = "Atualizar produto";
   cancelProdutoButton.classList.remove("hidden");
@@ -308,6 +329,9 @@ function cancelarEdicaoProduto() {
   prodDescInput.value = "";
   prodPesoInput.value = "";
   prodPrecoInput.value = "";
+  if (prodCodBarrasInput) {
+    prodCodBarrasInput.value = "";
+  }
   saveProdutoButton.textContent = "Salvar produto";
   cancelProdutoButton.classList.add("hidden");
   prodMessage.textContent = "";
@@ -417,6 +441,7 @@ saveProdutoButton.addEventListener("click", async () => {
   const descricao = prodDescInput.value.trim();
   const peso = Number(prodPesoInput.value || 0);
   const preco = Number(prodPrecoInput.value || 0);
+  const codBarras = prodCodBarrasInput ? prodCodBarrasInput.value.trim() : "";
 
   prodMessage.textContent = "";
   prodMessage.className = "msg";
@@ -442,7 +467,8 @@ saveProdutoButton.addEventListener("click", async () => {
       await db.collection("produtos").doc(editingProdutoId).update({
         descricao,
         pesoGramas: peso,
-        precoUnitario: preco
+        precoUnitario: preco,
+        codigoBarras: codBarras || null
       });
       prodMessage.textContent = "Produto atualizado com sucesso!";
       prodMessage.className = "msg ok";
@@ -452,6 +478,7 @@ saveProdutoButton.addEventListener("click", async () => {
         descricao,
         pesoGramas: peso,
         precoUnitario: preco,
+        codigoBarras: codBarras || null,
         ativo: true,
         criadoEm: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -461,6 +488,7 @@ saveProdutoButton.addEventListener("click", async () => {
       prodDescInput.value = "";
       prodPesoInput.value = "";
       prodPrecoInput.value = "";
+      if (prodCodBarrasInput) prodCodBarrasInput.value = "";
     }
     await carregarProdutos();
   } catch (e) {
