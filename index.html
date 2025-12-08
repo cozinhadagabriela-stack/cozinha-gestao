@@ -95,11 +95,6 @@
             <label for="sale-nf-number">Nº Nota Fiscal</label>
             <input type="text" id="sale-nf-number" placeholder="Ex.: 12345">
           </div>
-
-          <div class="form-group">
-            <label for="sale-nf-series">Série Nota Fiscal</label>
-            <input type="text" id="sale-nf-series" placeholder="Ex.: 1">
-          </div>
         </div>
 
         <h3>Itens do pedido</h3>
@@ -188,6 +183,15 @@
               <label for="filter-forma">Forma de pagamento</label>
               <select id="filter-forma">
                 <option value="">Todas as formas</option>
+              </select>
+            </div>
+            <!-- NOVO: filtro de Nota Fiscal -->
+            <div class="form-group">
+              <label for="filter-nf">Nota fiscal</label>
+              <select id="filter-nf">
+                <option value="">Todas</option>
+                <option value="com">Somente com NF</option>
+                <option value="sem">Somente sem NF</option>
               </select>
             </div>
           </div>
@@ -313,13 +317,12 @@
                 <th>Total (R$)</th>
                 <th>Lote</th>
                 <th>Nº NF</th>
-                <th>Série</th>
                 <th>Forma</th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody id="sales-tbody">
-              <tr><td colspan="11">Nenhuma venda carregada.</td></tr>
+              <tr><td colspan="10">Nenhuma venda carregada.</td></tr>
             </tbody>
           </table>
         </div>
