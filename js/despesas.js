@@ -1043,7 +1043,7 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // ---- Gráfico de pizza por categoria ----
+  // ---- Gráfico de pizza por categoria (IGUAL AO DE VENDAS) ----
   if (catCanvas) {
     const ctxCat = catCanvas.getContext("2d");
 
@@ -1055,19 +1055,35 @@ function atualizarGraficosDespesas(dados) {
     const labelsCat = Object.keys(porCategoria);
     const valoresCat = Object.values(porCategoria);
 
+    // Paleta simples de cores (igual vendas)
+    const baseColors = [
+      "#ff6384",
+      "#36a2eb",
+      "#ffcd56",
+      "#4bc0c0",
+      "#9966ff",
+      "#ff9f40",
+      "#8dd17e",
+      "#ff6f91"
+    ];
+    const coresCat = labelsCat.map((_, i) => baseColors[i % baseColors.length]);
+
     if (labelsCat.length && total > 0) {
       chartDespCategorias = new Chart(ctxCat, {
-        type: "doughnut",
+        type: "pie",
         data: {
           labels: labelsCat,
           datasets: [
             {
               data: valoresCat,
-            },
+              backgroundColor: coresCat,
+              borderWidth: 1
+            }
           ],
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           plugins: {
             legend: {
               position: "bottom",
@@ -1077,12 +1093,19 @@ function atualizarGraficosDespesas(dados) {
                 label: function (context) {
                   const v = context.parsed || 0;
                   const perc = total > 0 ? (v / total) * 100 : 0;
-                  return `${context.label}: ${formatarMoedaBR(v)} (${formatarPercent(
-                    perc
-                  )})`;
+                  return `${context.label}: ${formatarMoedaBR(v)} (${formatarPercent(perc)})`;
                 },
               },
             },
+            // opções do plugin de linhas de chamada (igual vendas)
+            pieCallout: {
+              color: "#666",
+              lineWidth: 1,
+              font: "12px Arial",
+              textColor: "#333",
+              labelOffset: 6,
+              extraRadius: 18
+            }
           },
         },
       });
