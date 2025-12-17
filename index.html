@@ -735,12 +735,21 @@
         <section class="subsection">
           <h3>Gráficos de despesas</h3>
           <div class="charts-grid">
+            <!-- NOVO: gráfico de linha mês a mês -->
+            <div class="chart-card">
+              <h4>Evolução dos gastos mês a mês</h4>
+              <div class="chart-wrapper">
+                <canvas id="chart-desp-mensal"></canvas>
+              </div>
+            </div>
+
             <div class="chart-card">
               <h4>Despesas por categoria</h4>
               <div class="chart-wrapper">
                 <canvas id="chart-desp-categorias"></canvas>
               </div>
             </div>
+
             <div class="chart-card">
               <h4>Top 5 fornecedores</h4>
               <div class="chart-wrapper">
