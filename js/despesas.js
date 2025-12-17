@@ -9,10 +9,13 @@ let itensDespesasCache = [];
 let itensDespesasMap = {};
 let itensPorFornecedorMap = {};
 
+// Guarda exatamente o que está sendo exibido na tabela (filtrado ou não)
+let despesasViewAtual = [];
+
 // Charts (despesas)
 let chartDespCategorias = null;
 let chartDespFornecedores = null;
-// NOVO: linha mês a mês
+// linha mês a mês
 let chartDespMensal = null;
 
 // ----------------------
@@ -62,6 +65,7 @@ const despFilterDescricaoInput   = document.getElementById("desp-filter-descrica
 const despFilterMarcaInput       = document.getElementById("desp-filter-marca");
 const btnDespApplyFilters        = document.getElementById("btn-desp-apply-filters");
 const btnDespClearFilters        = document.getElementById("btn-desp-clear-filters");
+const btnDespExportCsv           = document.getElementById("btn-desp-export-csv");
 const despesasTotalLabel         = document.getElementById("despesas-total");
 
 // ----------------------
@@ -87,6 +91,12 @@ function formatarMoedaBR(valor) {
 function formatarPercent(num) {
   const n = Number(num || 0);
   return n.toFixed(1).replace(".", ",") + "%";
+}
+
+function numeroBR(num) {
+  const n = Number(num || 0);
+  if (isNaN(n)) return "";
+  return n.toFixed(2).replace(".", ",");
 }
 
 // Formata "aaaa-mm-dd" -> "dd/mm/aaaa"
@@ -116,6 +126,83 @@ if (despQtdInput) {
 }
 if (despValorUnitInput) {
   despValorUnitInput.addEventListener("input", atualizarTotalDespesa);
+}
+
+function escapeCsvCell(value) {
+  const s = String(value ?? "");
+  const needsQuotes = /[;"\n\r]/.test(s);
+  const escaped = s.replace(/"/g, '""');
+  return needsQuotes ? `"${escaped}"` : escaped;
+}
+
+function gerarNomeArquivoDespesas() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mi = String(now.getMinutes()).padStart(2, "0");
+  return `despesas_${yyyy}-${mm}-${dd}_${hh}${mi}.csv`;
+}
+
+function exportarDespesasParaCsv() {
+  const lista = Array.isArray(despesasViewAtual) ? despesasViewAtual : [];
+  if (!lista.length) {
+    alert("Não há despesas para exportar.");
+    return;
+  }
+
+  // CSV com ; (Excel pt-BR costuma abrir melhor)
+  const header = [
+    "Data",
+    "Fornecedor",
+    "Descrição",
+    "Marca",
+    "Qtd",
+    "Valor unit. (R$)",
+    "Total (R$)",
+    "Forma pagto."
+  ].join(";");
+
+  const linhas = lista.map((d) => {
+    const data = formatarDataBrasil(d.dataPagamento || "");
+    const fornecedor = d.fornecedorNome || "";
+    const descricao = d.descricaoItem || "";
+    const marca = d.marca || "";
+    const qtd = d.quantidade != null ? d.quantidade : "";
+    const vUnit = d.valorUnitario != null ? numeroBR(d.valorUnitario) : "";
+    const vTotal = d.valorTotal != null ? numeroBR(d.valorTotal) : "";
+    const forma = d.formaDescricao || "";
+
+    return [
+      escapeCsvCell(data),
+      escapeCsvCell(fornecedor),
+      escapeCsvCell(descricao),
+      escapeCsvCell(marca),
+      escapeCsvCell(qtd),
+      escapeCsvCell(vUnit),
+      escapeCsvCell(vTotal),
+      escapeCsvCell(forma)
+    ].join(";");
+  });
+
+  // BOM para acentuação correta no Excel
+  const csv = "\uFEFF" + [header, ...linhas].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = gerarNomeArquivoDespesas();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+if (btnDespExportCsv) {
+  btnDespExportCsv.addEventListener("click", exportarDespesasParaCsv);
 }
 
 // ----------------------
@@ -173,7 +260,6 @@ async function carregarFornecedores() {
     if (despFilterFornecedorSelect) {
       despFilterFornecedorSelect.innerHTML = filterOptionsHtml;
     }
-    // select de fornecedor do cadastro de itens
     if (itemFornecedorSelect) {
       itemFornecedorSelect.innerHTML = optionsHtml;
     }
@@ -282,7 +368,6 @@ async function carregarItensDespesas() {
         }
         itensPorFornecedorMap[item.fornecedorId].push(item);
 
-        // Monta linha na tabela
         const tr = document.createElement("tr");
 
         const tdForn = document.createElement("td");
@@ -322,7 +407,6 @@ async function carregarItensDespesas() {
       });
     }
 
-    // Atualiza o select de itens no lançamento de despesas
     const fornecedorAtual = despFornecedorSelect?.value || "";
     if (fornecedorAtual) {
       atualizarSelectItensFornecedor(fornecedorAtual);
@@ -386,7 +470,6 @@ async function salvarItemDespesa() {
       itemMessage.className = "msg ok";
     }
 
-    // Limpa campos
     itemDescricaoInput.value = "";
     if (itemCategoriaSelect) itemCategoriaSelect.value = "";
     itemUnidadeInput.value = "";
@@ -422,7 +505,6 @@ if (btnSaveItemDespesa) {
   btnSaveItemDespesa.addEventListener("click", salvarItemDespesa);
 }
 
-// Atualiza o select de itens no lançamento, conforme o fornecedor
 function atualizarSelectItensFornecedor(fornecedorId) {
   if (!despItemSelect) return;
 
@@ -455,13 +537,11 @@ function atualizarSelectItensFornecedor(fornecedorId) {
   despItemSelect.appendChild(optOutro);
 }
 
-// Quando trocar o fornecedor no lançamento, recarrega os itens
 if (despFornecedorSelect) {
   despFornecedorSelect.addEventListener("change", () => {
     const fornecedorId = despFornecedorSelect.value || "";
     atualizarSelectItensFornecedor(fornecedorId);
 
-    // Sempre que troca o fornecedor, reseta campos do item
     if (despItemSelect) despItemSelect.value = "";
     if (despDescInput) {
       despDescInput.value = "";
@@ -472,7 +552,6 @@ if (despFornecedorSelect) {
   });
 }
 
-// Quando escolher um item, preenche descrição e, se tiver, preço padrão
 if (despItemSelect) {
   despItemSelect.addEventListener("change", () => {
     const itemId = despItemSelect.value;
@@ -544,6 +623,7 @@ async function carregarDespesas() {
     if (snap.empty) {
       despesasTbody.innerHTML =
         '<tr><td colspan="9">Nenhuma despesa lançada.</td></tr>';
+      despesasViewAtual = [];
       if (despesasTotalLabel) {
         despesasTotalLabel.textContent = formatarMoedaBR(0);
       }
@@ -568,7 +648,6 @@ async function carregarDespesas() {
       });
     });
 
-    // Ordenação do mais velho para o mais novo
     despesasCache.sort(
       (a, b) => (a.dataPagamentoTimestamp || 0) - (b.dataPagamentoTimestamp || 0)
     );
@@ -576,12 +655,12 @@ async function carregarDespesas() {
     renderizarDespesas(despesasCache);
     atualizarResumoDespesas(despesasCache);
 
-    // Carrega/atualiza também os itens de despesa
     await carregarItensDespesas();
   } catch (e) {
     console.error("Erro ao carregar despesas:", e);
     despesasTbody.innerHTML =
       '<tr><td colspan="9">Erro ao carregar despesas.</td></tr>';
+    despesasViewAtual = [];
     if (despesasTotalLabel) {
       despesasTotalLabel.textContent = formatarMoedaBR(0);
     }
@@ -596,6 +675,7 @@ function renderizarDespesas(lista) {
   if (!despesasTbody) return;
 
   const dados = Array.isArray(lista) ? lista : despesasCache;
+  despesasViewAtual = Array.isArray(dados) ? [...dados] : [];
 
   if (!dados || dados.length === 0) {
     despesasTbody.innerHTML =
@@ -681,7 +761,6 @@ function aplicarFiltrosDespesas() {
 
   let filtradas = [...despesasCache];
 
-  // Datas
   const start = despFilterStartInput?.value || "";
   const end   = despFilterEndInput?.value || "";
 
@@ -707,13 +786,11 @@ function aplicarFiltrosDespesas() {
     });
   }
 
-  // Fornecedor
   const fornecedorFiltro = despFilterFornecedorSelect?.value || "";
   if (fornecedorFiltro) {
     filtradas = filtradas.filter((d) => d.fornecedorId === fornecedorFiltro);
   }
 
-  // Descrição (contém)
   const descFiltro = (despFilterDescricaoInput?.value || "")
     .trim()
     .toLowerCase();
@@ -723,7 +800,6 @@ function aplicarFiltrosDespesas() {
     );
   }
 
-  // Marca (contém)
   const marcaFiltro = (despFilterMarcaInput?.value || "")
     .trim()
     .toLowerCase();
@@ -733,7 +809,6 @@ function aplicarFiltrosDespesas() {
     );
   }
 
-  // Ordena do mais velho para o mais novo
   filtradas.sort(
     (a, b) => (a.dataPagamentoTimestamp || 0) - (b.dataPagamentoTimestamp || 0)
   );
@@ -784,12 +859,10 @@ function atualizarIndicadoresDespesas(dados) {
     }
 
     const cat = (d.itemDespesaCategoria || "").trim();
-    // Matéria-prima + Embalagens
     if (cat === "Matéria-prima" || cat === "Embalagens") {
       totalMpEmb += v;
     }
 
-    // Despesas fixas
     if (cat === "Despesas fixas") {
       totalFixas += v;
     }
@@ -801,10 +874,8 @@ function atualizarIndicadoresDespesas(dados) {
     gastoPorFornecedor[fornNome] += v;
   });
 
-  // Número de lançamentos
   const numLanc = lista.length;
 
-  // Fornecedor top
   let topFornNome = "—";
   let topFornValor = 0;
   Object.entries(gastoPorFornecedor).forEach(([nome, valor]) => {
@@ -814,18 +885,11 @@ function atualizarIndicadoresDespesas(dados) {
     }
   });
 
-  if (kpiDespTotalEl) {
-    kpiDespTotalEl.textContent = formatarMoedaBR(total);
-  }
-  if (kpiDespMpEmbEl) {
-    kpiDespMpEmbEl.textContent = formatarMoedaBR(totalMpEmb);
-  }
-  if (kpiDespFixasEl) {
-    kpiDespFixasEl.textContent = formatarMoedaBR(totalFixas);
-  }
-  if (kpiDespNumLancEl) {
-    kpiDespNumLancEl.textContent = String(numLanc);
-  }
+  if (kpiDespTotalEl) kpiDespTotalEl.textContent = formatarMoedaBR(total);
+  if (kpiDespMpEmbEl) kpiDespMpEmbEl.textContent = formatarMoedaBR(totalMpEmb);
+  if (kpiDespFixasEl) kpiDespFixasEl.textContent = formatarMoedaBR(totalFixas);
+  if (kpiDespNumLancEl) kpiDespNumLancEl.textContent = String(numLanc);
+
   if (kpiDespTopFornEl) {
     if (topFornValor > 0) {
       kpiDespTopFornEl.textContent =
@@ -839,12 +903,8 @@ function atualizarIndicadoresDespesas(dados) {
 function atualizarResumosTabelaDespesas(dados) {
   const lista = Array.isArray(dados) ? dados : [];
 
-  if (kpiDespCategoriasTbody) {
-    kpiDespCategoriasTbody.innerHTML = "";
-  }
-  if (kpiDespFornecedoresTbody) {
-    kpiDespFornecedoresTbody.innerHTML = "";
-  }
+  if (kpiDespCategoriasTbody) kpiDespCategoriasTbody.innerHTML = "";
+  if (kpiDespFornecedoresTbody) kpiDespFornecedoresTbody.innerHTML = "";
 
   if (!lista.length) {
     if (kpiDespCategoriasTbody) {
@@ -876,7 +936,6 @@ function atualizarResumosTabelaDespesas(dados) {
     porFornecedor[forn] += v;
   });
 
-  // Tabela por categoria
   if (kpiDespCategoriasTbody) {
     const entriesCat = Object.entries(porCategoria)
       .sort((a, b) => b[1] - a[1]);
@@ -906,7 +965,6 @@ function atualizarResumosTabelaDespesas(dados) {
     }
   }
 
-  // Tabela por fornecedor (top 10)
   if (kpiDespFornecedoresTbody) {
     const entriesForn = Object.entries(porFornecedor)
       .sort((a, b) => b[1] - a[1])
@@ -950,8 +1008,6 @@ function atualizarGraficosDespesas(dados) {
   let total = 0;
   const porCategoria = {};
   const porFornecedor = {};
-
-  // NOVO: por mês (aaaa-mm)
   const porMes = {};
 
   lista.forEach((d) => {
@@ -968,10 +1024,9 @@ function atualizarGraficosDespesas(dados) {
     if (!porFornecedor[forn]) porFornecedor[forn] = 0;
     porFornecedor[forn] += v;
 
-    // agrega mês
     let ym = "";
     if (d.dataPagamento && String(d.dataPagamento).length >= 7) {
-      ym = String(d.dataPagamento).slice(0, 7); // "aaaa-mm"
+      ym = String(d.dataPagamento).slice(0, 7);
     } else if (d.dataPagamentoTimestamp) {
       const dt = new Date(Number(d.dataPagamentoTimestamp));
       if (!isNaN(dt.getTime())) {
@@ -986,15 +1041,13 @@ function atualizarGraficosDespesas(dados) {
     }
   });
 
-  // ---- NOVO: Gráfico de linha mês a mês ----
   if (mensalCanvas) {
     if (chartDespMensal) {
       chartDespMensal.destroy();
       chartDespMensal = null;
     }
 
-    const chavesMes = Object.keys(porMes).sort(); // 2025-01, 2025-02...
-
+    const chavesMes = Object.keys(porMes).sort();
     if (chavesMes.length) {
       const labels = chavesMes.map((ym) => {
         const [ano, mes] = ym.split("-");
@@ -1031,9 +1084,7 @@ function atualizarGraficosDespesas(dados) {
             }
           },
           scales: {
-            y: {
-              beginAtZero: true
-            }
+            y: { beginAtZero: true }
           }
         }
       });
@@ -1043,7 +1094,6 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // ---- Gráfico de pizza por categoria (AGORA IGUAL AO DE VENDAS) ----
   if (catCanvas) {
     const ctxCat = catCanvas.getContext("2d");
 
@@ -1053,10 +1103,7 @@ function atualizarGraficosDespesas(dados) {
     }
 
     const entriesCat = Object.keys(porCategoria || {})
-      .map((cat) => ({
-        categoria: cat,
-        valor: porCategoria[cat] || 0
-      }))
+      .map((cat) => ({ categoria: cat, valor: porCategoria[cat] || 0 }))
       .filter((e) => Number(e.valor) > 0)
       .sort((a, b) => b.valor - a.valor);
 
@@ -1064,7 +1111,6 @@ function atualizarGraficosDespesas(dados) {
       const labelsCat = entriesCat.map((e) => e.categoria);
       const valoresCat = entriesCat.map((e) => e.valor);
 
-      // Paleta simples de cores (igual vendas.js)
       const baseColors = [
         "#ff6384",
         "#36a2eb",
@@ -1093,9 +1139,7 @@ function atualizarGraficosDespesas(dados) {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: {
-              position: "bottom"
-            },
+            legend: { position: "bottom" },
             tooltip: {
               callbacks: {
                 label: function (context) {
@@ -1105,7 +1149,6 @@ function atualizarGraficosDespesas(dados) {
                 }
               }
             },
-            // opções do plugin de linhas de chamada (já registrado no vendas.js)
             pieCallout: {
               color: "#666",
               lineWidth: 1,
@@ -1122,7 +1165,6 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // ---- Gráfico de barras por fornecedor (Top 5) ----
   if (fornCanvas) {
     const ctxForn = fornCanvas.getContext("2d");
 
@@ -1143,35 +1185,27 @@ function atualizarGraficosDespesas(dados) {
         type: "bar",
         data: {
           labels: labelsForn,
-          datasets: [
-            {
-              data: valoresForn,
-            },
-          ],
+          datasets: [{ data: valoresForn }]
         },
         options: {
           indexAxis: "y",
           responsive: true,
           plugins: {
-            legend: {
-              display: false,
-            },
+            legend: { display: false },
             tooltip: {
               callbacks: {
                 label: function (context) {
                   const v = context.parsed.x || 0;
                   const perc = total > 0 ? (v / total) * 100 : 0;
                   return `${formatarMoedaBR(v)} (${formatarPercent(perc)})`;
-                },
-              },
-            },
+                }
+              }
+            }
           },
           scales: {
-            x: {
-              beginAtZero: true,
-            },
-          },
-        },
+            x: { beginAtZero: true }
+          }
+        }
       });
     } else {
       fornCanvas.getContext("2d").clearRect(0, 0, fornCanvas.width, fornCanvas.height);
@@ -1255,7 +1289,6 @@ async function salvarDespesa() {
       valorTotal,
       formaId,
       formaDescricao,
-      // Ligação com item de despesa (se houver)
       itemDespesaId: itemInfo ? itemInfo.id : null,
       itemDespesaDescricao: itemInfo ? itemInfo.descricao : null,
       itemDespesaCategoria: itemInfo ? itemInfo.categoria : null,
@@ -1269,7 +1302,6 @@ async function salvarDespesa() {
       despMessage.className = "msg ok";
     }
 
-    // limpa campos
     despFornecedorSelect.value = "";
     if (despItemSelect) despItemSelect.value = "";
     if (despQtdInput) despQtdInput.value = "1";
