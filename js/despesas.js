@@ -1043,7 +1043,7 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // ---- Gráfico de pizza por categoria (IGUAL AO DE VENDAS) ----
+  // ---- Gráfico de pizza por categoria (AGORA IGUAL AO DE VENDAS) ----
   if (catCanvas) {
     const ctxCat = catCanvas.getContext("2d");
 
@@ -1052,23 +1052,31 @@ function atualizarGraficosDespesas(dados) {
       chartDespCategorias = null;
     }
 
-    const labelsCat = Object.keys(porCategoria);
-    const valoresCat = Object.values(porCategoria);
+    const entriesCat = Object.keys(porCategoria || {})
+      .map((cat) => ({
+        categoria: cat,
+        valor: porCategoria[cat] || 0
+      }))
+      .filter((e) => Number(e.valor) > 0)
+      .sort((a, b) => b.valor - a.valor);
 
-    // Paleta simples de cores (igual vendas)
-    const baseColors = [
-      "#ff6384",
-      "#36a2eb",
-      "#ffcd56",
-      "#4bc0c0",
-      "#9966ff",
-      "#ff9f40",
-      "#8dd17e",
-      "#ff6f91"
-    ];
-    const coresCat = labelsCat.map((_, i) => baseColors[i % baseColors.length]);
+    if (entriesCat.length && total > 0) {
+      const labelsCat = entriesCat.map((e) => e.categoria);
+      const valoresCat = entriesCat.map((e) => e.valor);
 
-    if (labelsCat.length && total > 0) {
+      // Paleta simples de cores (igual vendas.js)
+      const baseColors = [
+        "#ff6384",
+        "#36a2eb",
+        "#ffcd56",
+        "#4bc0c0",
+        "#9966ff",
+        "#ff9f40",
+        "#8dd17e",
+        "#ff6f91"
+      ];
+      const cores = labelsCat.map((_, i) => baseColors[i % baseColors.length]);
+
       chartDespCategorias = new Chart(ctxCat, {
         type: "pie",
         data: {
@@ -1076,28 +1084,28 @@ function atualizarGraficosDespesas(dados) {
           datasets: [
             {
               data: valoresCat,
-              backgroundColor: coresCat,
+              backgroundColor: cores,
               borderWidth: 1
             }
-          ],
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: {
-              position: "bottom",
+              position: "bottom"
             },
             tooltip: {
               callbacks: {
                 label: function (context) {
-                  const v = context.parsed || 0;
+                  const v = Number(context.parsed || 0);
                   const perc = total > 0 ? (v / total) * 100 : 0;
                   return `${context.label}: ${formatarMoedaBR(v)} (${formatarPercent(perc)})`;
-                },
-              },
+                }
+              }
             },
-            // opções do plugin de linhas de chamada (igual vendas)
+            // opções do plugin de linhas de chamada (já registrado no vendas.js)
             pieCallout: {
               color: "#666",
               lineWidth: 1,
@@ -1106,8 +1114,8 @@ function atualizarGraficosDespesas(dados) {
               labelOffset: 6,
               extraRadius: 18
             }
-          },
-        },
+          }
+        }
       });
     } else {
       catCanvas.getContext("2d").clearRect(0, 0, catCanvas.width, catCanvas.height);
