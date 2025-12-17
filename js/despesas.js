@@ -12,6 +12,8 @@ let itensPorFornecedorMap = {};
 // Charts (despesas)
 let chartDespCategorias = null;
 let chartDespFornecedores = null;
+// NOVO: linha mês a mês
+let chartDespMensal = null;
 
 // ----------------------
 // Referências de fornecedores
@@ -939,18 +941,23 @@ function atualizarResumosTabelaDespesas(dados) {
 function atualizarGraficosDespesas(dados) {
   const lista = Array.isArray(dados) ? dados : [];
 
+  const mensalCanvas = document.getElementById("chart-desp-mensal");
   const catCanvas = document.getElementById("chart-desp-categorias");
   const fornCanvas = document.getElementById("chart-desp-fornecedores");
 
-  if (!catCanvas && !fornCanvas) return;
+  if (!mensalCanvas && !catCanvas && !fornCanvas) return;
 
   let total = 0;
   const porCategoria = {};
   const porFornecedor = {};
 
+  // NOVO: por mês (aaaa-mm)
+  const porMes = {};
+
   lista.forEach((d) => {
     const v = Number(d.valorTotal || 0);
     if (isNaN(v)) return;
+
     total += v;
 
     const cat = (d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria";
@@ -960,7 +967,81 @@ function atualizarGraficosDespesas(dados) {
     const forn = (d.fornecedorNome || "—").trim();
     if (!porFornecedor[forn]) porFornecedor[forn] = 0;
     porFornecedor[forn] += v;
+
+    // agrega mês
+    let ym = "";
+    if (d.dataPagamento && String(d.dataPagamento).length >= 7) {
+      ym = String(d.dataPagamento).slice(0, 7); // "aaaa-mm"
+    } else if (d.dataPagamentoTimestamp) {
+      const dt = new Date(Number(d.dataPagamentoTimestamp));
+      if (!isNaN(dt.getTime())) {
+        const ano = dt.getFullYear();
+        const mes = String(dt.getMonth() + 1).padStart(2, "0");
+        ym = `${ano}-${mes}`;
+      }
+    }
+    if (ym) {
+      if (!porMes[ym]) porMes[ym] = 0;
+      porMes[ym] += v;
+    }
   });
+
+  // ---- NOVO: Gráfico de linha mês a mês ----
+  if (mensalCanvas) {
+    if (chartDespMensal) {
+      chartDespMensal.destroy();
+      chartDespMensal = null;
+    }
+
+    const chavesMes = Object.keys(porMes).sort(); // 2025-01, 2025-02...
+
+    if (chavesMes.length) {
+      const labels = chavesMes.map((ym) => {
+        const [ano, mes] = ym.split("-");
+        return `${mes}/${ano}`;
+      });
+      const valores = chavesMes.map((ym) => porMes[ym]);
+
+      const ctxMes = mensalCanvas.getContext("2d");
+      chartDespMensal = new Chart(ctxMes, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Gastos (R$)",
+              data: valores,
+              fill: false,
+              tension: 0.2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  const v = Number(context.parsed?.y || 0);
+                  return `${formatarMoedaBR(v)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    } else {
+      const ctx = mensalCanvas.getContext("2d");
+      ctx && ctx.clearRect(0, 0, mensalCanvas.width, mensalCanvas.height);
+    }
+  }
 
   // ---- Gráfico de pizza por categoria ----
   if (catCanvas) {
@@ -1006,7 +1087,6 @@ function atualizarGraficosDespesas(dados) {
         },
       });
     } else {
-      // Se não tiver dados, deixa em branco
       catCanvas.getContext("2d").clearRect(0, 0, catCanvas.width, catCanvas.height);
     }
   }
