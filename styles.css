@@ -57,6 +57,10 @@ main {
   display: flex;
   justify-content: center;
   padding: 20px;
+
+  /* NOVO: permite centralizar o login no meio da tela */
+  position: relative;
+  min-height: calc(100vh - 60px);
 }
 
 /* ===== CARDS PRINCIPAIS ===== */
@@ -72,6 +76,42 @@ main {
 
 .hidden {
   display: none;
+}
+
+/* ===== LOGIN (NOVO) ===== */
+.login-card {
+  /* mais “retangular” (controlado), e no centro */
+  max-width: 520px;
+  width: min(520px, 100%);
+  padding: 20px 22px 22px;
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.login-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #b30000;
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.btn-link:hover {
+  color: #d20000;
 }
 
 /* ===== TÍTULOS ===== */
@@ -387,6 +427,7 @@ tbody tr:hover {
 
   main {
     padding: 10px;
+    min-height: calc(100vh - 70px);
   }
 
   .card {
@@ -399,5 +440,10 @@ tbody tr:hover {
 
   .chart-wrapper {
     height: 220px;
+  }
+
+  .login-card {
+    max-width: 92vw;
+    width: 92vw;
   }
 }
