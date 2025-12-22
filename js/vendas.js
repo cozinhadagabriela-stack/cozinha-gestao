@@ -315,8 +315,8 @@ async function carregarUltimasVendas() {
     const start = filterStartInput.value;
     const end = filterEndInput.value;
 
-    // NOVO: 1000 linhas
-    const LIMITE = 1000;
+    // NOVO: 10000 linhas
+    const LIMITE = 10000;
 
     // NOVO: busca no Firebase pelo período (mês atual por padrão)
     // (usa o campo "data" em ISO, que ordena certinho como texto)
@@ -1176,3 +1176,4 @@ saveSaleButton.addEventListener("click", async () => {
     saleMessage.className = "msg error";
   }
 });
+
