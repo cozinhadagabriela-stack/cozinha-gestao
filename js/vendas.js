@@ -103,11 +103,10 @@ function formatarDataBrasil(dataIso) {
   return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
 }
 
-// ====== NOVO: PERÍODO PADRÃO = MÊS ATUAL ======
+// ====== NOVO: PERÍODO PADRÃO (MÊS ATUAL) ======
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
-
 function toISODateLocal(d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
@@ -302,6 +301,7 @@ if (btnAddItem) {
 }
 
 // ====== CARREGAR / EXTRATO / KPIs ======
+// >>> AJUSTADO: por padrão mês atual + paginação (lotes de 1000) <<<
 
 async function carregarUltimasVendas() {
   salesTbody.innerHTML = '<tr><td colspan="10">Carregando...</td></tr>';
@@ -309,26 +309,60 @@ async function carregarUltimasVendas() {
   ultimasVendasCache = [];
 
   try {
-    // NOVO: por padrão, mês atual
     garantirPeriodoMesAtualNoFiltro();
 
     const start = filterStartInput.value;
     const end = filterEndInput.value;
 
-    // NOVO: 10000 linhas
-    const LIMITE = 10000;
+    const PAGE_SIZE = 1000;  // tamanho do lote
+    const MAX_TOTAL = 50000; // trava de segurança (ajuste se quiser)
 
-    // NOVO: busca no Firebase pelo período (mês atual por padrão)
-    // (usa o campo "data" em ISO, que ordena certinho como texto)
-    const snapshot = await db
-      .collection("vendas")
-      .where("data", ">=", start)
-      .where("data", "<=", end)
-      .orderBy("data", "desc")
-      .limit(LIMITE)
-      .get();
+    let lastDoc = null;
+    let totalCarregado = 0;
 
-    if (snapshot.empty) {
+    while (true) {
+      let query = db
+        .collection("vendas")
+        .where("data", ">=", start)
+        .where("data", "<=", end)
+        .orderBy("data", "desc")
+        .limit(PAGE_SIZE);
+
+      if (lastDoc) {
+        query = query.startAfter(lastDoc);
+      }
+
+      const snapshot = await query.get();
+      if (snapshot.empty) break;
+
+      snapshot.forEach((doc) => {
+        const v = doc.data() || {};
+
+        // Garante dataTimestamp para ordenação interna
+        if ((!v.dataTimestamp || !isFinite(Number(v.dataTimestamp))) && v.data) {
+          v.dataTimestamp = new Date(v.data).getTime();
+        }
+
+        ultimasVendasCache.push({
+          id: doc.id,
+          ...v
+        });
+      });
+
+      totalCarregado += snapshot.size;
+      lastDoc = snapshot.docs[snapshot.docs.length - 1];
+
+      // feedback simples enquanto carrega
+      salesTbody.innerHTML = `<tr><td colspan="10">Carregando... (${totalCarregado})</td></tr>`;
+
+      // trava de segurança
+      if (ultimasVendasCache.length >= MAX_TOTAL) break;
+
+      // se veio menos que o PAGE_SIZE, acabou
+      if (snapshot.size < PAGE_SIZE) break;
+    }
+
+    if (ultimasVendasCache.length === 0) {
       salesTbody.innerHTML =
         '<tr><td colspan="10">Nenhuma venda encontrada no período.</td></tr>';
       atualizarKPIsVazios();
@@ -336,20 +370,6 @@ async function carregarUltimasVendas() {
       atualizarGraficoDistribuicaoProdutos({});
       return;
     }
-
-    snapshot.forEach((doc) => {
-      const v = doc.data();
-
-      // Garante dataTimestamp para ordenação interna (caso algum registro antigo não tenha)
-      if ((!v.dataTimestamp || !isFinite(Number(v.dataTimestamp))) && v.data) {
-        v.dataTimestamp = new Date(v.data).getTime();
-      }
-
-      ultimasVendasCache.push({
-        id: doc.id,
-        ...v
-      });
-    });
 
     renderizarVendasFiltradas();
   } catch (e) {
@@ -992,7 +1012,7 @@ exportCsvButton.addEventListener("click", () => {
 
 // ===== Filtros de vendas =====
 applyFilterButton.addEventListener("click", async () => {
-  // NOVO: ao aplicar, rebusca do Firebase (garante que não “faltou venda”)
+  // Agora: ao aplicar, rebusca do Firebase (garante pegar tudo do período)
   await carregarUltimasVendas();
 });
 
@@ -1176,4 +1196,3 @@ saveSaleButton.addEventListener("click", async () => {
     saleMessage.className = "msg error";
   }
 });
-
