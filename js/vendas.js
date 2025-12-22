@@ -103,6 +103,40 @@ function formatarDataBrasil(dataIso) {
   return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
 }
 
+// ====== NOVO: PERÍODO PADRÃO = MÊS ATUAL ======
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function toISODateLocal(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// Se o usuário não escolher datas, o extrato já abre no mês atual
+function garantirPeriodoMesAtualNoFiltro() {
+  if (!filterStartInput || !filterEndInput) return;
+
+  const startAtual = (filterStartInput.value || "").trim();
+  const endAtual = (filterEndInput.value || "").trim();
+
+  if (!startAtual && !endAtual) {
+    const hoje = new Date();
+    const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    filterStartInput.value = toISODateLocal(primeiroDia);
+    filterEndInput.value = toISODateLocal(ultimoDia);
+    return;
+  }
+
+  // Se preencheu só um, replica no outro (evita “meio filtro”)
+  if (startAtual && !endAtual) {
+    filterEndInput.value = startAtual;
+  } else if (!startAtual && endAtual) {
+    filterStartInput.value = endAtual;
+  }
+}
+
 // ====== FUNÇÕES AUXILIARES (VENDA) ======
 
 // Atualiza o campo "Total do pedido (R$)"
@@ -275,15 +309,28 @@ async function carregarUltimasVendas() {
   ultimasVendasCache = [];
 
   try {
+    // NOVO: por padrão, mês atual
+    garantirPeriodoMesAtualNoFiltro();
+
+    const start = filterStartInput.value;
+    const end = filterEndInput.value;
+
+    // NOVO: 1000 linhas
+    const LIMITE = 1000;
+
+    // NOVO: busca no Firebase pelo período (mês atual por padrão)
+    // (usa o campo "data" em ISO, que ordena certinho como texto)
     const snapshot = await db
       .collection("vendas")
-      .orderBy("dataTimestamp", "desc")
-      .limit(100)
+      .where("data", ">=", start)
+      .where("data", "<=", end)
+      .orderBy("data", "desc")
+      .limit(LIMITE)
       .get();
 
     if (snapshot.empty) {
       salesTbody.innerHTML =
-        '<tr><td colspan="10">Nenhuma venda encontrada.</td></tr>';
+        '<tr><td colspan="10">Nenhuma venda encontrada no período.</td></tr>';
       atualizarKPIsVazios();
       atualizarGraficoFaturamentoMensal([]);
       atualizarGraficoDistribuicaoProdutos({});
@@ -292,6 +339,12 @@ async function carregarUltimasVendas() {
 
     snapshot.forEach((doc) => {
       const v = doc.data();
+
+      // Garante dataTimestamp para ordenação interna (caso algum registro antigo não tenha)
+      if ((!v.dataTimestamp || !isFinite(Number(v.dataTimestamp))) && v.data) {
+        v.dataTimestamp = new Date(v.data).getTime();
+      }
+
       ultimasVendasCache.push({
         id: doc.id,
         ...v
@@ -938,18 +991,21 @@ exportCsvButton.addEventListener("click", () => {
 });
 
 // ===== Filtros de vendas =====
-applyFilterButton.addEventListener("click", () => {
-  renderizarVendasFiltradas();
+applyFilterButton.addEventListener("click", async () => {
+  // NOVO: ao aplicar, rebusca do Firebase (garante que não “faltou venda”)
+  await carregarUltimasVendas();
 });
 
-clearFilterButton.addEventListener("click", () => {
+clearFilterButton.addEventListener("click", async () => {
+  // Limpa filtros e volta ao mês atual automaticamente
   filterStartInput.value = "";
   filterEndInput.value = "";
   filterClientSelect.value = "";
   filterProductSelect.value = "";
   filterFormaSelect.value = "";
   if (filterNfSelect) filterNfSelect.value = "";
-  renderizarVendasFiltradas();
+
+  await carregarUltimasVendas();
 });
 
 // ===== Salvar venda (grava TODOS os itens do pedido) =====
