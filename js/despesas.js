@@ -108,6 +108,45 @@ function formatarDataBrasil(dataIso) {
   return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
 }
 
+// ==============================
+// ✅ FILTRO: iniciar no mês atual
+// (igual Extrato/Relatório)
+// ==============================
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+function toISODateLocal(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function garantirMesAtualNoFiltroDespesas() {
+  if (!despFilterStartInput || !despFilterEndInput) return;
+
+  const startAtual = (despFilterStartInput.value || "").trim();
+  const endAtual   = (despFilterEndInput.value || "").trim();
+
+  // Se os dois vazios, coloca mês atual completo
+  if (!startAtual && !endAtual) {
+    const hoje = new Date();
+    const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const ultimo   = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+
+    despFilterStartInput.value = toISODateLocal(primeiro);
+    despFilterEndInput.value   = toISODateLocal(ultimo);
+    return;
+  }
+
+  // Se só um preenchido, copia no outro
+  if (startAtual && !endAtual) {
+    despFilterEndInput.value = startAtual;
+  } else if (!startAtual && endAtual) {
+    despFilterStartInput.value = endAtual;
+  }
+}
+
+// Já tenta aplicar ao carregar o JS (se inputs existirem)
+garantirMesAtualNoFiltroDespesas();
+
 // Atualizar total da despesa (qtd x valor unit)
 function atualizarTotalDespesa() {
   if (!despValorTotalInput) return;
@@ -652,8 +691,9 @@ async function carregarDespesas() {
       (a, b) => (a.dataPagamentoTimestamp || 0) - (b.dataPagamentoTimestamp || 0)
     );
 
-    renderizarDespesas(despesasCache);
-    atualizarResumoDespesas(despesasCache);
+    // ✅ aplica o padrão de mês atual se estiver vazio e já filtra ao iniciar
+    garantirMesAtualNoFiltroDespesas();
+    aplicarFiltrosDespesas();
 
     await carregarItensDespesas();
   } catch (e) {
@@ -753,6 +793,9 @@ function renderizarDespesas(lista) {
 // Filtros de despesas
 // ----------------------
 function aplicarFiltrosDespesas() {
+  // ✅ garante mês atual se estiver vazio (não muda se já tiver data)
+  garantirMesAtualNoFiltroDespesas();
+
   if (!despesasCache || despesasCache.length === 0) {
     renderizarDespesas([]);
     atualizarResumoDespesas([]);
@@ -818,14 +861,16 @@ function aplicarFiltrosDespesas() {
 }
 
 function limparFiltrosDespesas() {
-  if (despFilterStartInput) despFilterStartInput.value = "";
-  if (despFilterEndInput) despFilterEndInput.value = "";
+  // ✅ limpa os outros filtros e volta o período para o mês atual (igual vendas)
   if (despFilterFornecedorSelect) despFilterFornecedorSelect.value = "";
   if (despFilterDescricaoInput) despFilterDescricaoInput.value = "";
   if (despFilterMarcaInput) despFilterMarcaInput.value = "";
 
-  renderizarDespesas(despesasCache);
-  atualizarResumoDespesas(despesasCache);
+  if (despFilterStartInput) despFilterStartInput.value = "";
+  if (despFilterEndInput) despFilterEndInput.value = "";
+
+  garantirMesAtualNoFiltroDespesas();
+  aplicarFiltrosDespesas();
 }
 
 if (btnDespApplyFilters) {
@@ -1165,6 +1210,7 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
+  // ✅ Mantido em BARRAS (Top 5 fornecedores) — sem alterar
   if (fornCanvas) {
     const ctxForn = fornCanvas.getContext("2d");
 
