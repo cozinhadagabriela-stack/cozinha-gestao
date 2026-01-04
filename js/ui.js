@@ -60,7 +60,7 @@ const kpiTopProduto = document.getElementById("kpi-top-produto");
 const kpiTopCidade = document.getElementById("kpi-top-cidade");
 
 
-// KPIs de comparação (período anterior equivalente)
+// KPIs de comparação (mesmas datas do mês anterior)
 const kpiCompFaturamento = document.getElementById("kpi-comp-faturamento");
 const kpiCompUnidades = document.getElementById("kpi-comp-unidades");
 const kpiCompTicketMedio = document.getElementById("kpi-comp-ticket-medio");
