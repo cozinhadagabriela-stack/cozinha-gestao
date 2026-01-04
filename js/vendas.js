@@ -136,6 +136,97 @@ function garantirPeriodoMesAtualNoFiltro() {
   }
 }
 
+
+// ====== COMPARAÇÃO: PERÍODO ANTERIOR EQUIVALENTE (AUTOMÁTICO) ======
+function parseISODateLocal(iso) {
+  if (!iso || typeof iso !== "string") return null;
+  const parts = iso.split("-");
+  if (parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!y || !m || !d) return null;
+  // Cria como data local (evita deslocamento por fuso)
+  const dt = new Date(y, m - 1, d);
+  if (isNaN(dt.getTime())) return null;
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+function diffDaysInclusive(startIso, endIso) {
+  const s = parseISODateLocal(startIso);
+  const e = parseISODateLocal(endIso);
+  if (!s || !e) return null;
+  const ms = e.getTime() - s.getTime();
+  if (ms < 0) return null;
+  return Math.floor(ms / 86400000) + 1; // inclui o dia inicial e final
+}
+
+function addDaysISO(iso, deltaDays) {
+  const dt = parseISODateLocal(iso);
+  if (!dt) return null;
+  dt.setDate(dt.getDate() + Number(deltaDays || 0));
+  return toISODateLocal(dt);
+}
+
+// Retorna o período anterior equivalente ao período [start, end]
+// Ex.: 10/02 a 20/02 (11 dias) -> 30/01 a 09/02
+function obterPeriodoAnteriorEquivalente(startIso, endIso) {
+  const dias = diffDaysInclusive(startIso, endIso);
+  if (!dias) return { prevStart: null, prevEnd: null, dias: null };
+
+  const prevEnd = addDaysISO(startIso, -1);
+  if (!prevEnd) return { prevStart: null, prevEnd: null, dias: null };
+
+  const prevStart = addDaysISO(prevEnd, -(dias - 1));
+  if (!prevStart) return { prevStart: null, prevEnd: null, dias: null };
+
+  return { prevStart, prevEnd, dias };
+}
+
+// ====== FORMATAÇÃO para KPIs de comparação ======
+function formatarMoedaSimples(valor) {
+  const num = Number(valor || 0);
+  if (!isFinite(num)) return "R$ 0.00";
+  return "R$ " + num.toFixed(2);
+}
+
+function formatarNumeroSimples(valor, casas = 0) {
+  const num = Number(valor || 0);
+  if (!isFinite(num)) return "0";
+  return num.toFixed(casas);
+}
+
+function formatarDelta(curr, prev, isMoney = false, casas = 0) {
+  const c = Number(curr || 0);
+  const p = Number(prev || 0);
+
+  if (!isFinite(c) || !isFinite(p)) return "—";
+
+  const delta = c - p;
+
+  let percTxt = "—";
+  if (p !== 0) {
+    const perc = (delta / p) * 100;
+    percTxt = (perc >= 0 ? "+" : "") + perc.toFixed(1) + "%";
+  }
+
+  const deltaTxt = isMoney
+    ? (delta >= 0 ? "+" : "") + formatarMoedaSimples(delta).replace("R$ ", "R$ ")
+    : (delta >= 0 ? "+" : "") + formatarNumeroSimples(delta, casas);
+
+  return `${deltaTxt} (${percTxt})`;
+}
+
+function formatarPontosPercentuais(currPerc, prevPerc) {
+  const c = Number(currPerc || 0);
+  const p = Number(prevPerc || 0);
+  if (!isFinite(c) || !isFinite(p)) return "—";
+  const dp = c - p;
+  const dpTxt = (dp >= 0 ? "+" : "") + dp.toFixed(1) + " p.p.";
+  return dpTxt;
+}
+
 // ====== FUNÇÕES AUXILIARES (VENDA) ======
 
 // Atualiza o campo "Total do pedido (R$)"
@@ -314,6 +405,10 @@ async function carregarUltimasVendas() {
     const start = filterStartInput.value;
     const end = filterEndInput.value;
 
+    // Para comparar com o período anterior equivalente, carregamos também esse período no cache
+    const periodoPrev = obterPeriodoAnteriorEquivalente(start, end);
+    const fetchStart = periodoPrev.prevStart || start;
+
     const PAGE_SIZE = 1000;  // tamanho do lote
     const MAX_TOTAL = 50000; // trava de segurança (ajuste se quiser)
 
@@ -323,7 +418,7 @@ async function carregarUltimasVendas() {
     while (true) {
       let query = db
         .collection("vendas")
-        .where("data", ">=", start)
+        .where("data", ">=", fetchStart)
         .where("data", "<=", end)
         .orderBy("data", "desc")
         .limit(PAGE_SIZE);
@@ -398,6 +493,7 @@ function atualizarKPIsVazios() {
   // cidades agora têm 3 colunas (inclui %)
   kpiCidadesBody.innerHTML =
     '<tr><td colspan="3">Sem dados.</td></tr>';
+  limparKPIsComparacao();
 }
 
 // Tabelas de resumo (produto, forma, cidade)
@@ -520,83 +616,204 @@ function atualizarTabelasDetalhe(
   }
 }
 
+
+// ====== KPIs DE COMPARAÇÃO (período anterior equivalente) ======
+function calcularMetricasComparacao(lista) {
+  const vendas = Array.isArray(lista) ? lista : [];
+
+  let totalValor = 0;
+  let totalQtd = 0;
+  let totalPedidos = 0;
+  const pedidosSet = new Set();
+  const clientesSet = new Set();
+
+  const mapaClienteValor = {};
+  const mapaProdutoValor = {};
+  const mapaCidadeValor = {};
+
+  vendas.forEach((v) => {
+    const valor = Number(v.valorTotal || 0);
+    const qtd = Number(v.quantidade || 0);
+
+    if (isFinite(valor)) totalValor += valor;
+    if (isFinite(qtd)) totalQtd += qtd;
+
+    const clienteId = v.clienteId || "";
+    if (clienteId) clientesSet.add(clienteId);
+
+    const chavePedido =
+      v.pedidoChave ||
+      [v.data || "", v.clienteId || "", v.formaId || "", v.numeroNota || ""].join("|");
+
+    if (!pedidosSet.has(chavePedido)) {
+      pedidosSet.add(chavePedido);
+      totalPedidos += 1;
+    }
+
+    const clienteNome = (v.clienteNome || "—").trim() || "—";
+    mapaClienteValor[clienteNome] = (mapaClienteValor[clienteNome] || 0) + (isFinite(valor) ? valor : 0);
+
+    const produtoDesc = (v.produtoDescricao || "—").trim() || "—";
+    mapaProdutoValor[produtoDesc] = (mapaProdutoValor[produtoDesc] || 0) + (isFinite(valor) ? valor : 0);
+
+    const cidade = (v.clienteCidade || "—").trim() || "—";
+    mapaCidadeValor[cidade] = (mapaCidadeValor[cidade] || 0) + (isFinite(valor) ? valor : 0);
+  });
+
+  // Ticket médio por pedido
+  const ticketMedio = totalPedidos > 0 ? totalValor / totalPedidos : 0;
+  // Preço médio por unidade
+  const precoMedio = totalQtd > 0 ? totalValor / totalQtd : 0;
+
+  // Concentração por cliente (Top1 / Top3)
+  const clientesOrdenados = Object.entries(mapaClienteValor).sort((a, b) => b[1] - a[1]);
+  const top1Valor = clientesOrdenados.length ? clientesOrdenados[0][1] : 0;
+  const top3Valor = clientesOrdenados.slice(0, 3).reduce((acc, [, v]) => acc + Number(v || 0), 0);
+
+  const top1Share = totalValor > 0 ? (top1Valor / totalValor) * 100 : 0;
+  const top3Share = totalValor > 0 ? (top3Valor / totalValor) * 100 : 0;
+
+  // Produto #1 (por faturamento)
+  let topProdutoNome = "—";
+  let topProdutoValor = 0;
+  Object.entries(mapaProdutoValor).forEach(([nome, v]) => {
+    if (v > topProdutoValor) {
+      topProdutoValor = v;
+      topProdutoNome = nome;
+    }
+  });
+  const topProdutoShare = totalValor > 0 ? (topProdutoValor / totalValor) * 100 : 0;
+
+  // Cidade #1 (por faturamento)
+  let topCidadeNome = "—";
+  let topCidadeValor = 0;
+  Object.entries(mapaCidadeValor).forEach(([nome, v]) => {
+    if (v > topCidadeValor) {
+      topCidadeValor = v;
+      topCidadeNome = nome;
+    }
+  });
+  const topCidadeShare = totalValor > 0 ? (topCidadeValor / totalValor) * 100 : 0;
+
+  return {
+    totalValor,
+    totalQtd,
+    totalPedidos,
+    clientesUnicos: clientesSet.size,
+    ticketMedio,
+    precoMedio,
+    // shares
+    top1Share,
+    top3Share,
+    topProdutoNome,
+    topProdutoShare,
+    topCidadeNome,
+    topCidadeShare,
+    // maps (para lookup de share no período anterior)
+    mapaProdutoValor,
+    mapaCidadeValor
+  };
+}
+
+function obterShareNoPeriodo(mapaValor, totalValor, chave) {
+  if (!mapaValor || !totalValor || totalValor <= 0) return 0;
+  const v = Number(mapaValor[chave] || 0);
+  if (!isFinite(v) || v <= 0) return 0;
+  return (v / totalValor) * 100;
+}
+
+function atualizarKPIsComparacao(metricAtual, metricAnterior) {
+  if (typeof kpiCompFaturamento === "undefined") return; // ui.js não tem (evita quebrar)
+
+  const a = metricAtual || {};
+  const p = metricAnterior || {};
+
+  // Faturamento
+  if (kpiCompFaturamento) {
+    const deltaTxt = formatarDelta(a.totalValor, p.totalValor, true, 2);
+    kpiCompFaturamento.textContent = `${formatarMoedaSimples(a.totalValor)} • ${deltaTxt}`;
+  }
+
+  // Unidades
+  if (kpiCompUnidades) {
+    const deltaTxt = formatarDelta(a.totalQtd, p.totalQtd, false, 0);
+    kpiCompUnidades.textContent = `${formatarNumeroSimples(a.totalQtd, 0)} • ${deltaTxt}`;
+  }
+
+  // Ticket médio
+  if (kpiCompTicketMedio) {
+    const deltaTxt = formatarDelta(a.ticketMedio, p.ticketMedio, true, 2);
+    kpiCompTicketMedio.textContent = `${formatarMoedaSimples(a.ticketMedio)} • ${deltaTxt}`;
+  }
+
+  // Preço médio por unidade
+  if (kpiCompPrecoMedio) {
+    const deltaTxt = formatarDelta(a.precoMedio, p.precoMedio, true, 2);
+    kpiCompPrecoMedio.textContent = `${formatarMoedaSimples(a.precoMedio)} • ${deltaTxt}`;
+  }
+
+  // Clientes únicos
+  if (kpiCompClientesUnicos) {
+    const deltaTxt = formatarDelta(a.clientesUnicos, p.clientesUnicos, false, 0);
+    kpiCompClientesUnicos.textContent = `${formatarNumeroSimples(a.clientesUnicos, 0)} • ${deltaTxt}`;
+  }
+
+  // Concentração Top 1
+  if (kpiCompTop1Share) {
+    const dp = formatarPontosPercentuais(a.top1Share, p.top1Share);
+    kpiCompTop1Share.textContent = `${a.top1Share.toFixed(1)}% • ${dp}`;
+  }
+
+  // Concentração Top 3
+  if (kpiCompTop3Share) {
+    const dp = formatarPontosPercentuais(a.top3Share, p.top3Share);
+    kpiCompTop3Share.textContent = `${a.top3Share.toFixed(1)}% • ${dp}`;
+  }
+
+  // Produto #1 (share no anterior do MESMO produto)
+  if (kpiCompProduto1Share) {
+    const sharePrevMesmoProduto = obterShareNoPeriodo(
+      p.mapaProdutoValor,
+      p.totalValor,
+      a.topProdutoNome
+    );
+    const dp = formatarPontosPercentuais(a.topProdutoShare, sharePrevMesmoProduto);
+    kpiCompProduto1Share.textContent = `${a.topProdutoNome}: ${a.topProdutoShare.toFixed(1)}% • ${dp}`;
+  }
+
+  // Cidade #1 (share no anterior da MESMA cidade)
+  if (kpiCompCidade1Share) {
+    const sharePrevMesmaCidade = obterShareNoPeriodo(
+      p.mapaCidadeValor,
+      p.totalValor,
+      a.topCidadeNome
+    );
+    const dp = formatarPontosPercentuais(a.topCidadeShare, sharePrevMesmaCidade);
+    kpiCompCidade1Share.textContent = `${a.topCidadeNome}: ${a.topCidadeShare.toFixed(1)}% • ${dp}`;
+  }
+}
+
+function limparKPIsComparacao() {
+  if (typeof kpiCompFaturamento === "undefined") return;
+  if (kpiCompFaturamento) kpiCompFaturamento.textContent = "—";
+  if (kpiCompUnidades) kpiCompUnidades.textContent = "—";
+  if (kpiCompTicketMedio) kpiCompTicketMedio.textContent = "—";
+  if (kpiCompPrecoMedio) kpiCompPrecoMedio.textContent = "—";
+  if (kpiCompClientesUnicos) kpiCompClientesUnicos.textContent = "—";
+  if (kpiCompTop1Share) kpiCompTop1Share.textContent = "—";
+  if (kpiCompTop3Share) kpiCompTop3Share.textContent = "—";
+  if (kpiCompProduto1Share) kpiCompProduto1Share.textContent = "—";
+  if (kpiCompCidade1Share) kpiCompCidade1Share.textContent = "—";
+}
+
 // ====== GRÁFICOS (FUNÇÕES) ======
 
 // Evolução do faturamento mensal (line chart)
-// ✅ Ajuste: gráfico "inteligente" conforme o período filtrado
-// - Até 45 dias: dia a dia
-// - Acima de 45 dias: mês a mês
-function parseISODateLocal(iso) {
-  if (!iso) return null;
-  const parts = String(iso).split("-");
-  if (parts.length !== 3) return null;
-  const y = Number(parts[0]);
-  const m = Number(parts[1]);
-  const d = Number(parts[2]);
-  if (!isFinite(y) || !isFinite(m) || !isFinite(d)) return null;
-  return new Date(y, m - 1, d);
-}
-
-function diasInclusive(startIso, endIso) {
-  const s = parseISODateLocal(startIso);
-  const e = parseISODateLocal(endIso);
-  if (!s || !e) return null;
-  const ms = e.getTime() - s.getTime();
-  return Math.floor(ms / 86400000) + 1; // inclusivo
-}
-
-function listarDiasInclusive(startIso, endIso) {
-  const s = parseISODateLocal(startIso);
-  const e = parseISODateLocal(endIso);
-  if (!s || !e) return [];
-
-  const out = [];
-  const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-  const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-
-  while (cur.getTime() <= end.getTime()) {
-    out.push(toISODateLocal(cur)); // usa helper já existente no arquivo
-    cur.setDate(cur.getDate() + 1);
-  }
-  return out;
-}
-
-function listarMesesInclusive(startIso, endIso) {
-  const s = parseISODateLocal(startIso);
-  const e = parseISODateLocal(endIso);
-  if (!s || !e) return [];
-
-  const out = [];
-  const cur = new Date(s.getFullYear(), s.getMonth(), 1);
-  const end = new Date(e.getFullYear(), e.getMonth(), 1);
-
-  while (cur.getTime() <= end.getTime()) {
-    out.push(`${cur.getFullYear()}-${pad2(cur.getMonth() + 1)}`); // YYYY-MM
-    cur.setMonth(cur.getMonth() + 1);
-  }
-  return out;
-}
-
-function formatarDDMM(iso) {
-  // iso: YYYY-MM-DD
-  const parts = String(iso).split("-");
-  if (parts.length !== 3) return iso;
-  return `${parts[2]}/${parts[1]}`;
-}
-
-function formatarMMYYYY(ym) {
-  // ym: YYYY-MM
-  const parts = String(ym).split("-");
-  if (parts.length !== 2) return ym;
-  const [ano, mes] = parts;
-  return `${mes}/${ano}`;
-}
-
 function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
   const canvas = document.getElementById("chart-faturamento-mensal");
   if (!canvas || typeof Chart === "undefined") return;
 
-  // Se não há vendas, destrói o gráfico atual
+  // Se não há vendas, só destrói o gráfico atual
   if (!vendasFiltradas || vendasFiltradas.length === 0) {
     if (chartFaturamentoMensal) {
       chartFaturamentoMensal.destroy();
@@ -605,67 +822,36 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
     return;
   }
 
-  // garante que o período exista (padrão: mês atual)
-  garantirPeriodoMesAtualNoFiltro();
+  const mapaMesValor = {};
 
-  const startIso = (filterStartInput && filterStartInput.value)
-    ? String(filterStartInput.value).trim()
-    : "";
-  const endIso = (filterEndInput && filterEndInput.value)
-    ? String(filterEndInput.value).trim()
-    : "";
+  vendasFiltradas.forEach((v) => {
+    const dataIso = v.data || "";
+    if (!dataIso || dataIso.length < 7) return;
+    const anoMes = dataIso.slice(0, 7); // "aaaa-mm"
+    const valor = Number(v.valorTotal || 0);
+    if (!mapaMesValor[anoMes]) mapaMesValor[anoMes] = 0;
+    mapaMesValor[anoMes] += valor;
+  });
 
-  const qtdDias = diasInclusive(startIso, endIso);
-  const modo = (isFinite(qtdDias) && qtdDias !== null && qtdDias <= 45) ? "diario" : "mensal";
-
-  let labels = [];
-  let valores = [];
-
-  if (modo === "diario" && startIso && endIso) {
-    // Preenche todos os dias (inclusive dias sem venda = 0)
-    const dias = listarDiasInclusive(startIso, endIso);
-    const mapaDiaValor = {};
-    dias.forEach((d) => (mapaDiaValor[d] = 0));
-
-    vendasFiltradas.forEach((v) => {
-      const d = v.data || "";
-      if (!d) return;
-      if (mapaDiaValor[d] == null) mapaDiaValor[d] = 0;
-      mapaDiaValor[d] += Number(v.valorTotal || 0);
-    });
-
-    labels = dias.map((d) => formatarDDMM(d));
-    valores = dias.map((d) => mapaDiaValor[d] || 0);
-  } else {
-    // Mês a mês (preenche meses sem venda com 0 dentro do período)
-    const meses = (startIso && endIso) ? listarMesesInclusive(startIso, endIso) : [];
-    const mapaMesValor = {};
-    meses.forEach((m) => (mapaMesValor[m] = 0));
-
-    vendasFiltradas.forEach((v) => {
-      const dataIso = v.data || "";
-      if (!dataIso || dataIso.length < 7) return;
-      const ym = dataIso.slice(0, 7); // YYYY-MM
-      if (mapaMesValor[ym] == null) mapaMesValor[ym] = 0;
-      mapaMesValor[ym] += Number(v.valorTotal || 0);
-    });
-
-    const chavesOrdenadas = Object.keys(mapaMesValor).sort();
-    labels = chavesOrdenadas.map((ym) => formatarMMYYYY(ym));
-    valores = chavesOrdenadas.map((ym) => mapaMesValor[ym] || 0);
+  const chavesOrdenadas = Object.keys(mapaMesValor).sort(); // 2025-01, 2025-02...
+  if (chavesOrdenadas.length === 0) {
+    if (chartFaturamentoMensal) {
+      chartFaturamentoMensal.destroy();
+      chartFaturamentoMensal = null;
+    }
+    return;
   }
 
-  // Se o modo mudou (diário <-> mensal), recria o gráfico para não "prender" escala/config
-  if (chartFaturamentoMensal && chartFaturamentoMensal.__modo !== modo) {
-    chartFaturamentoMensal.destroy();
-    chartFaturamentoMensal = null;
-  }
+  const labels = chavesOrdenadas.map((ym) => {
+    const [ano, mes] = ym.split("-");
+    return `${mes}/${ano}`;
+  });
+  const valores = chavesOrdenadas.map((ym) => mapaMesValor[ym]);
 
   if (chartFaturamentoMensal) {
     chartFaturamentoMensal.data.labels = labels;
     chartFaturamentoMensal.data.datasets[0].data = valores;
     chartFaturamentoMensal.update();
-    chartFaturamentoMensal.__modo = modo;
   } else {
     const ctx = canvas.getContext("2d");
     chartFaturamentoMensal = new Chart(ctx, {
@@ -685,15 +871,11 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: false }
+          legend: {
+            display: false
+          }
         },
         scales: {
-          x: {
-            ticks: {
-              autoSkip: true,
-              maxRotation: 0
-            }
-          },
           y: {
             ticks: {
               beginAtZero: true
@@ -702,7 +884,6 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
         }
       }
     });
-    chartFaturamentoMensal.__modo = modo;
   }
 }
 
@@ -805,9 +986,9 @@ function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
 // ====== FILTROS EM MEMÓRIA / EXTRATO ======
 
 // Ordena das datas mais antigas para as mais novas
-function aplicarFiltrosEmMemoria() {
-  const start = filterStartInput.value;
-  const end = filterEndInput.value;
+
+// Ordena das datas mais antigas para as mais novas
+function aplicarFiltrosEmMemoriaPeriodo(start, end) {
   const clienteFiltro = filterClientSelect.value;
   const produtoFiltro = filterProductSelect.value;
   const formaFiltro = filterFormaSelect.value;
@@ -839,6 +1020,14 @@ function aplicarFiltrosEmMemoria() {
     return true;
   });
 }
+
+// Ordena das datas mais antigas para as mais novas (período atual dos filtros)
+function aplicarFiltrosEmMemoria() {
+  const start = filterStartInput.value;
+  const end = filterEndInput.value;
+  return aplicarFiltrosEmMemoriaPeriodo(start, end);
+}
+
 
 function renderizarVendasFiltradas() {
   const vendasFiltradas = aplicarFiltrosEmMemoria();
@@ -1012,6 +1201,25 @@ function renderizarVendasFiltradas() {
     mapaCidadeValor,
     totalValor
   );
+
+  // ====== KPIs de comparação (período anterior equivalente) ======
+  const startAtual = filterStartInput.value;
+  const endAtual = filterEndInput.value;
+  const periodoPrevComp = obterPeriodoAnteriorEquivalente(startAtual, endAtual);
+
+  if (periodoPrevComp.prevStart && periodoPrevComp.prevEnd) {
+    const vendasPrev = aplicarFiltrosEmMemoriaPeriodo(
+      periodoPrevComp.prevStart,
+      periodoPrevComp.prevEnd
+    );
+
+    const metAtual = calcularMetricasComparacao(vendasFiltradas);
+    const metPrev = calcularMetricasComparacao(vendasPrev);
+
+    atualizarKPIsComparacao(metAtual, metPrev);
+  } else {
+    limparKPIsComparacao();
+  }
 
   // Atualiza os gráficos com base nas vendas filtradas
   atualizarGraficoFaturamentoMensal(vendasFiltradas);
