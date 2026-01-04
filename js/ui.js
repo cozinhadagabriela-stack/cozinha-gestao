@@ -59,6 +59,19 @@ const kpiTopCliente = document.getElementById("kpi-top-cliente");
 const kpiTopProduto = document.getElementById("kpi-top-produto");
 const kpiTopCidade = document.getElementById("kpi-top-cidade");
 
+
+// KPIs de comparação (período anterior equivalente)
+const kpiCompFaturamento = document.getElementById("kpi-comp-faturamento");
+const kpiCompUnidades = document.getElementById("kpi-comp-unidades");
+const kpiCompTicketMedio = document.getElementById("kpi-comp-ticket-medio");
+const kpiCompPrecoMedio = document.getElementById("kpi-comp-preco-medio");
+const kpiCompClientesUnicos = document.getElementById("kpi-comp-clientes-unicos");
+const kpiCompTop1Share = document.getElementById("kpi-comp-top1-share");
+const kpiCompTop3Share = document.getElementById("kpi-comp-top3-share");
+const kpiCompProduto1Share = document.getElementById("kpi-comp-produto1-share");
+const kpiCompCidade1Share = document.getElementById("kpi-comp-cidade1-share");
+
+
 const kpiProdutosBody = document.getElementById("kpi-produtos-tbody");
 const kpiFormasBody = document.getElementById("kpi-formas-tbody");
 const kpiCidadesBody = document.getElementById("kpi-cidades-tbody");
