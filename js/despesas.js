@@ -77,6 +77,25 @@ const kpiDespFixasEl        = document.getElementById("kpi-desp-fixas");
 const kpiDespNumLancEl      = document.getElementById("kpi-desp-num-lanc");
 const kpiDespTopFornEl      = document.getElementById("kpi-desp-top-forn");
 
+// ✅ NOVOS KPIs
+const kpiDespMediaLancEl    = document.getElementById("kpi-desp-media-lanc");
+const kpiDespMediaDiaEl     = document.getElementById("kpi-desp-media-dia");
+const kpiDespFornUnicosEl   = document.getElementById("kpi-desp-forn-unicos");
+const kpiDespTopCatEl       = document.getElementById("kpi-desp-top-cat");
+const kpiDespPctMpEmbEl     = document.getElementById("kpi-desp-pct-mpemb");
+const kpiDespPctFixasEl     = document.getElementById("kpi-desp-pct-fixas");
+
+// ✅ COMPARAÇÃO (mês anterior)
+const kpiDespVsTotalEl          = document.getElementById("kpi-desp-vs-total");
+const kpiDespVsMpEmbEl          = document.getElementById("kpi-desp-vs-mpemb");
+const kpiDespVsFixasEl          = document.getElementById("kpi-desp-vs-fixas");
+const kpiDespVsNumLancEl        = document.getElementById("kpi-desp-vs-num-lanc");
+const kpiDespVsMediaLancEl      = document.getElementById("kpi-desp-vs-media-lanc");
+const kpiDespVsFornUnicosEl     = document.getElementById("kpi-desp-vs-forn-unicos");
+const kpiDespVsPctMpEmbEl       = document.getElementById("kpi-desp-vs-pct-mpemb");
+const kpiDespVsTopFornConcEl    = document.getElementById("kpi-desp-vs-top-forn-conc");
+const kpiDespVsTopCatConcEl     = document.getElementById("kpi-desp-vs-top-cat-conc");
+
 const kpiDespCategoriasTbody    = document.getElementById("kpi-desp-categorias-tbody");
 const kpiDespFornecedoresTbody  = document.getElementById("kpi-desp-fornecedores-tbody");
 
@@ -108,10 +127,6 @@ function formatarDataBrasil(dataIso) {
   return `${dia.padStart(2, "0")}/${mes.padStart(2, "0")}/${ano}`;
 }
 
-// ==============================
-// ✅ FILTRO: iniciar no mês atual
-// (igual Extrato/Relatório)
-// ==============================
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -119,6 +134,228 @@ function toISODateLocal(d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+function parseISODateLocal(iso) {
+  const s = String(iso || "").slice(0, 10);
+  if (!s) return null;
+  const d = new Date(s + "T00:00:00");
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function diffDaysInclusive(start, end) {
+  if (!start || !end) return 0;
+  const a = new Date(start.getTime());
+  const b = new Date(end.getTime());
+  a.setHours(0, 0, 0, 0);
+  b.setHours(0, 0, 0, 0);
+  const ms = b.getTime() - a.getTime();
+  return Math.floor(ms / 86400000) + 1;
+}
+
+// shift de mês com "clamp" (ex.: 31/03 -> 28/02)
+function shiftMonthClamped(dateObj, deltaMonths) {
+  if (!dateObj) return null;
+  const y = dateObj.getFullYear();
+  const m = dateObj.getMonth() + deltaMonths;
+  const day = dateObj.getDate();
+
+  const base = new Date(y, m, 1);
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+
+  const out = new Date(base.getFullYear(), base.getMonth(), Math.min(day, lastDay));
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+function formatarPP(diff) {
+  const n = Number(diff || 0);
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  return `${sign}${Math.abs(n).toFixed(1).replace(".", ",")} p.p.`;
+}
+
+function variacaoPct(cur, prev) {
+  const c = Number(cur || 0);
+  const p = Number(prev || 0);
+
+  if (p === 0) {
+    if (c === 0) return "0,0%";
+    return "novo";
+  }
+
+  const pct = ((c - p) / p) * 100;
+  const sign = pct > 0 ? "+" : "";
+  return sign + formatarPercent(pct);
+}
+
+function deltaInt(cur, prev) {
+  const c = Number(cur || 0);
+  const p = Number(prev || 0);
+  const d = c - p;
+  const sign = d > 0 ? "+" : "";
+  return sign + String(d);
+}
+
+function montarResumoValor(nome, valor) {
+  if (!nome || !(Number(valor || 0) > 0)) return "—";
+  return `${nome} (${formatarMoedaBR(valor)})`;
+}
+
+function obterDataDespesaISO(d) {
+  // tenta usar dataPagamento (YYYY-MM-DD) primeiro
+  const iso = String(d?.dataPagamento || "").slice(0, 10);
+  if (iso && iso.length === 10) return iso;
+
+  // fallback timestamp
+  const ts = Number(d?.dataPagamentoTimestamp || 0);
+  if (ts) return toISODateLocal(new Date(ts));
+
+  return "";
+}
+
+function calcularStatsDespesas(lista, rangeStart, rangeEnd) {
+  const dados = Array.isArray(lista) ? lista : [];
+
+  let total = 0;
+  let totalMpEmb = 0;
+  let totalFixas = 0;
+
+  const porFornecedor = {};
+  const porCategoria = {};
+  const fornecedoresSet = new Set();
+
+  // Para fallback de dias (se não houver range válido)
+  const diasComGastoSet = new Set();
+
+  dados.forEach((d) => {
+    const v = Number(d.valorTotal || 0);
+    if (isNaN(v) || v <= 0) return;
+
+    total += v;
+
+    const cat = (d.itemDespesaCategoria || "").trim();
+    if (cat === "Matéria-prima" || cat === "Embalagens") {
+      totalMpEmb += v;
+    }
+    if (cat === "Despesas fixas") {
+      totalFixas += v;
+    }
+
+    const catKey = ((d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria");
+    porCategoria[catKey] = (porCategoria[catKey] || 0) + v;
+
+    const fornNome = ((d.fornecedorNome || "—").trim() || "—");
+    porFornecedor[fornNome] = (porFornecedor[fornNome] || 0) + v;
+
+    if (fornNome && fornNome !== "—") fornecedoresSet.add(fornNome);
+
+    const isoDia = obterDataDespesaISO(d);
+    if (isoDia) diasComGastoSet.add(isoDia);
+  });
+
+  const numLanc = dados.length;
+
+  // Top fornecedor
+  let topFornNome = "";
+  let topFornValor = 0;
+  Object.entries(porFornecedor).forEach(([nome, valor]) => {
+    if (valor > topFornValor) {
+      topFornValor = valor;
+      topFornNome = nome;
+    }
+  });
+
+  // Top categoria
+  let topCatNome = "";
+  let topCatValor = 0;
+  Object.entries(porCategoria).forEach(([nome, valor]) => {
+    if (valor > topCatValor) {
+      topCatValor = valor;
+      topCatNome = nome;
+    }
+  });
+
+  // Percentuais
+  const pctMpEmb = total > 0 ? (totalMpEmb / total) * 100 : 0;
+  const pctFixas = total > 0 ? (totalFixas / total) * 100 : 0;
+
+  // Ticket médio
+  const ticketMedio = numLanc > 0 ? (total / numLanc) : 0;
+
+  // Dias do período
+  let diasPeriodo = 0;
+  if (rangeStart && rangeEnd && rangeEnd.getTime() >= rangeStart.getTime()) {
+    diasPeriodo = diffDaysInclusive(rangeStart, rangeEnd);
+  } else {
+    diasPeriodo = diasComGastoSet.size || 0;
+  }
+  const mediaDia = diasPeriodo > 0 ? (total / diasPeriodo) : 0;
+
+  // Concentração (share)
+  const topFornShare = total > 0 ? (topFornValor / total) * 100 : 0;
+  const topCatShare = total > 0 ? (topCatValor / total) * 100 : 0;
+
+  return {
+    total,
+    totalMpEmb,
+    totalFixas,
+    numLanc,
+    ticketMedio,
+    mediaDia,
+    diasPeriodo,
+    fornecedoresUnicos: fornecedoresSet.size,
+    topFornNome,
+    topFornValor,
+    topFornShare,
+    topCatNome,
+    topCatValor,
+    topCatShare,
+    pctMpEmb,
+    pctFixas
+  };
+}
+
+function filtrarListaPorPeriodoEFiltros(baseList, startDate, endDate) {
+  const listaBase = Array.isArray(baseList) ? baseList : [];
+
+  // filtros não-data (iguais ao aplicarFiltrosDespesas)
+  const fornecedorFiltro = despFilterFornecedorSelect?.value || "";
+  const descFiltro = (despFilterDescricaoInput?.value || "").trim().toLowerCase();
+  const marcaFiltro = (despFilterMarcaInput?.value || "").trim().toLowerCase();
+
+  const startTs = startDate ? new Date(startDate.getTime()) : null;
+  const endTs = endDate ? new Date(endDate.getTime()) : null;
+  if (startTs) startTs.setHours(0, 0, 0, 0);
+  if (endTs) endTs.setHours(23, 59, 59, 999);
+
+  let out = listaBase;
+
+  if (startTs) {
+    const tsStart = startTs.getTime();
+    out = out.filter((d) => (Number(d.dataPagamentoTimestamp || 0)) >= tsStart);
+  }
+  if (endTs) {
+    const tsEnd = endTs.getTime();
+    out = out.filter((d) => (Number(d.dataPagamentoTimestamp || 0)) <= tsEnd);
+  }
+
+  if (fornecedorFiltro) {
+    out = out.filter((d) => d.fornecedorId === fornecedorFiltro);
+  }
+
+  if (descFiltro) {
+    out = out.filter((d) => (d.descricaoItem || "").toLowerCase().includes(descFiltro));
+  }
+
+  if (marcaFiltro) {
+    out = out.filter((d) => (d.marca || "").toLowerCase().includes(marcaFiltro));
+  }
+
+  return out;
+}
+
+// ==============================
+// ✅ FILTRO: iniciar no mês atual
+// (igual Extrato/Relatório)
+// ==============================
 function garantirMesAtualNoFiltroDespesas() {
   if (!despFilterStartInput || !despFilterEndInput) return;
 
@@ -892,56 +1129,83 @@ function atualizarResumoDespesas(dados) {
 function atualizarIndicadoresDespesas(dados) {
   const lista = Array.isArray(dados) ? dados : [];
 
-  let total = 0;
-  let totalMpEmb = 0;
-  let totalFixas = 0;
-  const gastoPorFornecedor = {};
+  // range do filtro (para média/dia e comparação)
+  const rangeStart = parseISODateLocal(despFilterStartInput?.value || "");
+  const rangeEnd   = parseISODateLocal(despFilterEndInput?.value || "");
 
-  lista.forEach((d) => {
-    const v = Number(d.valorTotal || 0);
-    if (!isNaN(v)) {
-      total += v;
-    }
+  const statsAtual = calcularStatsDespesas(lista, rangeStart, rangeEnd);
 
-    const cat = (d.itemDespesaCategoria || "").trim();
-    if (cat === "Matéria-prima" || cat === "Embalagens") {
-      totalMpEmb += v;
-    }
-
-    if (cat === "Despesas fixas") {
-      totalFixas += v;
-    }
-
-    const fornNome = (d.fornecedorNome || "—").trim();
-    if (!gastoPorFornecedor[fornNome]) {
-      gastoPorFornecedor[fornNome] = 0;
-    }
-    gastoPorFornecedor[fornNome] += v;
-  });
-
-  const numLanc = lista.length;
-
-  let topFornNome = "—";
-  let topFornValor = 0;
-  Object.entries(gastoPorFornecedor).forEach(([nome, valor]) => {
-    if (valor > topFornValor) {
-      topFornValor = valor;
-      topFornNome = nome;
-    }
-  });
-
-  if (kpiDespTotalEl) kpiDespTotalEl.textContent = formatarMoedaBR(total);
-  if (kpiDespMpEmbEl) kpiDespMpEmbEl.textContent = formatarMoedaBR(totalMpEmb);
-  if (kpiDespFixasEl) kpiDespFixasEl.textContent = formatarMoedaBR(totalFixas);
-  if (kpiDespNumLancEl) kpiDespNumLancEl.textContent = String(numLanc);
+  // KPIs base
+  if (kpiDespTotalEl) kpiDespTotalEl.textContent = formatarMoedaBR(statsAtual.total);
+  if (kpiDespMpEmbEl) kpiDespMpEmbEl.textContent = formatarMoedaBR(statsAtual.totalMpEmb);
+  if (kpiDespFixasEl) kpiDespFixasEl.textContent = formatarMoedaBR(statsAtual.totalFixas);
+  if (kpiDespNumLancEl) kpiDespNumLancEl.textContent = String(statsAtual.numLanc);
 
   if (kpiDespTopFornEl) {
-    if (topFornValor > 0) {
-      kpiDespTopFornEl.textContent =
-        `${topFornNome} (${formatarMoedaBR(topFornValor)})`;
-    } else {
-      kpiDespTopFornEl.textContent = "—";
-    }
+    kpiDespTopFornEl.textContent = montarResumoValor(statsAtual.topFornNome, statsAtual.topFornValor);
+  }
+
+  // ✅ NOVOS KPIs
+  if (kpiDespMediaLancEl) kpiDespMediaLancEl.textContent = formatarMoedaBR(statsAtual.ticketMedio);
+  if (kpiDespMediaDiaEl)  kpiDespMediaDiaEl.textContent  = formatarMoedaBR(statsAtual.mediaDia);
+  if (kpiDespFornUnicosEl) kpiDespFornUnicosEl.textContent = String(statsAtual.fornecedoresUnicos);
+
+  if (kpiDespTopCatEl) {
+    kpiDespTopCatEl.textContent = montarResumoValor(statsAtual.topCatNome, statsAtual.topCatValor);
+  }
+
+  if (kpiDespPctMpEmbEl) kpiDespPctMpEmbEl.textContent = formatarPercent(statsAtual.pctMpEmb);
+  if (kpiDespPctFixasEl) kpiDespPctFixasEl.textContent = formatarPercent(statsAtual.pctFixas);
+
+  // ✅ COMPARAÇÃO vs mesmas datas do mês anterior
+  atualizarComparacaoDespesas(statsAtual, rangeStart, rangeEnd);
+}
+
+function atualizarComparacaoDespesas(statsAtual, rangeStart, rangeEnd) {
+  // se não tiver range, não dá pra comparar direito
+  if (!rangeStart || !rangeEnd || rangeEnd.getTime() < rangeStart.getTime()) {
+    const els = [
+      kpiDespVsTotalEl, kpiDespVsMpEmbEl, kpiDespVsFixasEl, kpiDespVsNumLancEl,
+      kpiDespVsMediaLancEl, kpiDespVsFornUnicosEl, kpiDespVsPctMpEmbEl,
+      kpiDespVsTopFornConcEl, kpiDespVsTopCatConcEl
+    ];
+    els.forEach((el) => { if (el) el.textContent = "—"; });
+    return;
+  }
+
+  const prevStart = shiftMonthClamped(rangeStart, -1);
+  const prevEnd   = shiftMonthClamped(rangeEnd, -1);
+
+  const listaPrev = filtrarListaPorPeriodoEFiltros(despesasCache, prevStart, prevEnd);
+  const statsPrev = calcularStatsDespesas(listaPrev, prevStart, prevEnd);
+
+  // Total / MP+Emb / Fixas (mostra valor atual + var%)
+  if (kpiDespVsTotalEl)  kpiDespVsTotalEl.textContent  = `${formatarMoedaBR(statsAtual.total)} (${variacaoPct(statsAtual.total, statsPrev.total)})`;
+  if (kpiDespVsMpEmbEl)  kpiDespVsMpEmbEl.textContent  = `${formatarMoedaBR(statsAtual.totalMpEmb)} (${variacaoPct(statsAtual.totalMpEmb, statsPrev.totalMpEmb)})`;
+  if (kpiDespVsFixasEl)  kpiDespVsFixasEl.textContent  = `${formatarMoedaBR(statsAtual.totalFixas)} (${variacaoPct(statsAtual.totalFixas, statsPrev.totalFixas)})`;
+
+  // Lançamentos / Fornecedores únicos (mostra atual + delta)
+  if (kpiDespVsNumLancEl)    kpiDespVsNumLancEl.textContent    = `${statsAtual.numLanc} (${deltaInt(statsAtual.numLanc, statsPrev.numLanc)})`;
+  if (kpiDespVsFornUnicosEl) kpiDespVsFornUnicosEl.textContent = `${statsAtual.fornecedoresUnicos} (${deltaInt(statsAtual.fornecedoresUnicos, statsPrev.fornecedoresUnicos)})`;
+
+  // Ticket médio (valor atual + var%)
+  if (kpiDespVsMediaLancEl) {
+    kpiDespVsMediaLancEl.textContent = `${formatarMoedaBR(statsAtual.ticketMedio)} (${variacaoPct(statsAtual.ticketMedio, statsPrev.ticketMedio)})`;
+  }
+
+  // % MP+Emb vs anterior (p.p.)
+  if (kpiDespVsPctMpEmbEl) {
+    kpiDespVsPctMpEmbEl.textContent = formatarPP(statsAtual.pctMpEmb - statsPrev.pctMpEmb);
+  }
+
+  // Concentração Top 1 fornecedor (p.p.)
+  if (kpiDespVsTopFornConcEl) {
+    kpiDespVsTopFornConcEl.textContent = formatarPP(statsAtual.topFornShare - statsPrev.topFornShare);
+  }
+
+  // Categoria #1 share (p.p.)
+  if (kpiDespVsTopCatConcEl) {
+    kpiDespVsTopCatConcEl.textContent = formatarPP(statsAtual.topCatShare - statsPrev.topCatShare);
   }
 }
 
@@ -1096,16 +1360,14 @@ function atualizarGraficosDespesas(dados) {
   const porDia = {};
   const porMes = {};
 
-  // Range preferencial: o período do filtro (porque quando o usuário filtra,
-  // ele quer que TUDO siga esse período)
+  // Range preferencial: o período do filtro
   const startIso = despFilterStartInput?.value || "";
   const endIso = despFilterEndInput?.value || "";
 
   let rangeStart = parseISODateLocal(startIso);
   let rangeEnd = parseISODateLocal(endIso);
 
-  // fallback: se por algum motivo não tiver filtro preenchido,
-  // usa o min/max dos dados
+  // fallback: min/max dos dados
   if (!rangeStart || !rangeEnd) {
     let minTs = null;
     let maxTs = null;
@@ -1123,18 +1385,13 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // normaliza range
   if (rangeStart) rangeStart.setHours(0, 0, 0, 0);
   if (rangeEnd) rangeEnd.setHours(0, 0, 0, 0);
 
-  // Se range inválido, não desenha linha
   const hasRange = !!(rangeStart && rangeEnd && rangeEnd.getTime() >= rangeStart.getTime());
   const rangeDays =
     hasRange ? Math.floor((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1 : 0;
 
-  // Heurística:
-  // - até 45 dias => mostra diário (fica legível)
-  // - acima disso => agrupa por mês
   const useDaily = hasRange && rangeDays <= 45;
 
   lista.forEach((d) => {
@@ -1152,7 +1409,6 @@ function atualizarGraficosDespesas(dados) {
     if (!porFornecedor[forn]) porFornecedor[forn] = 0;
     porFornecedor[forn] += v;
 
-    // data da despesa
     let dt = null;
     if (d.dataPagamento) {
       dt = parseISODateLocal(d.dataPagamento);
@@ -1186,7 +1442,6 @@ function atualizarGraficosDespesas(dados) {
       const ctx = mensalCanvas.getContext("2d");
       ctx && ctx.clearRect(0, 0, mensalCanvas.width, mensalCanvas.height);
     } else {
-      // gera labels/valores preenchendo lacunas
       let labels = [];
       let valores = [];
 
@@ -1212,7 +1467,6 @@ function atualizarGraficosDespesas(dados) {
         valores = keys.map((k) => Number(porMes[k] || 0));
       }
 
-      // recria se mudou o "modo" (diário x mensal)
       const newMode = useDaily ? "daily" : "monthly";
       if (chartDespMensal && chartDespMensal.__cg_mode !== newMode) {
         chartDespMensal.destroy();
@@ -1326,14 +1580,6 @@ function atualizarGraficosDespesas(dados) {
                   return `${context.label}: ${formatarMoedaBR(v)} (${formatarPercent(perc)})`;
                 }
               }
-            },
-            pieCallout: {
-              color: "#666",
-              lineWidth: 1,
-              font: "12px Arial",
-              textColor: "#333",
-              labelOffset: 6,
-              extraRadius: 18
             }
           }
         }
@@ -1343,7 +1589,7 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // ===== Barras Top 5 fornecedores (mantido) =====
+  // ===== Barras Top 5 fornecedores =====
   if (fornCanvas) {
     const ctxForn = fornCanvas.getContext("2d");
 
