@@ -523,11 +523,80 @@ function atualizarTabelasDetalhe(
 // ====== GRÁFICOS (FUNÇÕES) ======
 
 // Evolução do faturamento mensal (line chart)
+// ✅ Ajuste: gráfico "inteligente" conforme o período filtrado
+// - Até 45 dias: dia a dia
+// - Acima de 45 dias: mês a mês
+function parseISODateLocal(iso) {
+  if (!iso) return null;
+  const parts = String(iso).split("-");
+  if (parts.length !== 3) return null;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!isFinite(y) || !isFinite(m) || !isFinite(d)) return null;
+  return new Date(y, m - 1, d);
+}
+
+function diasInclusive(startIso, endIso) {
+  const s = parseISODateLocal(startIso);
+  const e = parseISODateLocal(endIso);
+  if (!s || !e) return null;
+  const ms = e.getTime() - s.getTime();
+  return Math.floor(ms / 86400000) + 1; // inclusivo
+}
+
+function listarDiasInclusive(startIso, endIso) {
+  const s = parseISODateLocal(startIso);
+  const e = parseISODateLocal(endIso);
+  if (!s || !e) return [];
+
+  const out = [];
+  const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+
+  while (cur.getTime() <= end.getTime()) {
+    out.push(toISODateLocal(cur)); // usa helper já existente no arquivo
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+function listarMesesInclusive(startIso, endIso) {
+  const s = parseISODateLocal(startIso);
+  const e = parseISODateLocal(endIso);
+  if (!s || !e) return [];
+
+  const out = [];
+  const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+  const end = new Date(e.getFullYear(), e.getMonth(), 1);
+
+  while (cur.getTime() <= end.getTime()) {
+    out.push(`${cur.getFullYear()}-${pad2(cur.getMonth() + 1)}`); // YYYY-MM
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return out;
+}
+
+function formatarDDMM(iso) {
+  // iso: YYYY-MM-DD
+  const parts = String(iso).split("-");
+  if (parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}`;
+}
+
+function formatarMMYYYY(ym) {
+  // ym: YYYY-MM
+  const parts = String(ym).split("-");
+  if (parts.length !== 2) return ym;
+  const [ano, mes] = parts;
+  return `${mes}/${ano}`;
+}
+
 function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
   const canvas = document.getElementById("chart-faturamento-mensal");
   if (!canvas || typeof Chart === "undefined") return;
 
-  // Se não há vendas, só destrói o gráfico atual
+  // Se não há vendas, destrói o gráfico atual
   if (!vendasFiltradas || vendasFiltradas.length === 0) {
     if (chartFaturamentoMensal) {
       chartFaturamentoMensal.destroy();
@@ -536,36 +605,67 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
     return;
   }
 
-  const mapaMesValor = {};
+  // garante que o período exista (padrão: mês atual)
+  garantirPeriodoMesAtualNoFiltro();
 
-  vendasFiltradas.forEach((v) => {
-    const dataIso = v.data || "";
-    if (!dataIso || dataIso.length < 7) return;
-    const anoMes = dataIso.slice(0, 7); // "aaaa-mm"
-    const valor = Number(v.valorTotal || 0);
-    if (!mapaMesValor[anoMes]) mapaMesValor[anoMes] = 0;
-    mapaMesValor[anoMes] += valor;
-  });
+  const startIso = (filterStartInput && filterStartInput.value)
+    ? String(filterStartInput.value).trim()
+    : "";
+  const endIso = (filterEndInput && filterEndInput.value)
+    ? String(filterEndInput.value).trim()
+    : "";
 
-  const chavesOrdenadas = Object.keys(mapaMesValor).sort(); // 2025-01, 2025-02...
-  if (chavesOrdenadas.length === 0) {
-    if (chartFaturamentoMensal) {
-      chartFaturamentoMensal.destroy();
-      chartFaturamentoMensal = null;
-    }
-    return;
+  const qtdDias = diasInclusive(startIso, endIso);
+  const modo = (isFinite(qtdDias) && qtdDias !== null && qtdDias <= 45) ? "diario" : "mensal";
+
+  let labels = [];
+  let valores = [];
+
+  if (modo === "diario" && startIso && endIso) {
+    // Preenche todos os dias (inclusive dias sem venda = 0)
+    const dias = listarDiasInclusive(startIso, endIso);
+    const mapaDiaValor = {};
+    dias.forEach((d) => (mapaDiaValor[d] = 0));
+
+    vendasFiltradas.forEach((v) => {
+      const d = v.data || "";
+      if (!d) return;
+      if (mapaDiaValor[d] == null) mapaDiaValor[d] = 0;
+      mapaDiaValor[d] += Number(v.valorTotal || 0);
+    });
+
+    labels = dias.map((d) => formatarDDMM(d));
+    valores = dias.map((d) => mapaDiaValor[d] || 0);
+  } else {
+    // Mês a mês (preenche meses sem venda com 0 dentro do período)
+    const meses = (startIso && endIso) ? listarMesesInclusive(startIso, endIso) : [];
+    const mapaMesValor = {};
+    meses.forEach((m) => (mapaMesValor[m] = 0));
+
+    vendasFiltradas.forEach((v) => {
+      const dataIso = v.data || "";
+      if (!dataIso || dataIso.length < 7) return;
+      const ym = dataIso.slice(0, 7); // YYYY-MM
+      if (mapaMesValor[ym] == null) mapaMesValor[ym] = 0;
+      mapaMesValor[ym] += Number(v.valorTotal || 0);
+    });
+
+    const chavesOrdenadas = Object.keys(mapaMesValor).sort();
+    labels = chavesOrdenadas.map((ym) => formatarMMYYYY(ym));
+    valores = chavesOrdenadas.map((ym) => mapaMesValor[ym] || 0);
   }
 
-  const labels = chavesOrdenadas.map((ym) => {
-    const [ano, mes] = ym.split("-");
-    return `${mes}/${ano}`;
-  });
-  const valores = chavesOrdenadas.map((ym) => mapaMesValor[ym]);
+  // Se o modo mudou (diário <-> mensal), recria o gráfico para não "prender" escala/config
+  if (chartFaturamentoMensal && chartFaturamentoMensal.__modo !== modo) {
+    chartFaturamentoMensal.destroy();
+    chartFaturamentoMensal = null;
+  }
 
   if (chartFaturamentoMensal) {
     chartFaturamentoMensal.data.labels = labels;
     chartFaturamentoMensal.data.datasets[0].data = valores;
     chartFaturamentoMensal.update();
+    chartFaturamentoMensal.__modo = modo;
   } else {
     const ctx = canvas.getContext("2d");
     chartFaturamentoMensal = new Chart(ctx, {
@@ -585,11 +685,15 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: {
-            display: false
-          }
+          legend: { display: false }
         },
         scales: {
+          x: {
+            ticks: {
+              autoSkip: true,
+              maxRotation: 0
+            }
+          },
           y: {
             ticks: {
               beginAtZero: true
@@ -598,6 +702,7 @@ function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
         }
       }
     });
+    chartFaturamentoMensal.__modo = modo;
   }
 }
 
