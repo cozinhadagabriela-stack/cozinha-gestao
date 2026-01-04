@@ -833,82 +833,241 @@ function limparKPIsComparacao() {
 // ====== GRÁFICOS (FUNÇÕES) ======
 
 // Evolução do faturamento mensal (line chart)
+
 function atualizarGraficoFaturamentoMensal(vendasFiltradas) {
   const canvas = document.getElementById("chart-faturamento-mensal");
-  if (!canvas || typeof Chart === "undefined") return;
+  if (!canvas) return;
+  if (typeof Chart === "undefined") return;
 
-  // Se não há vendas, só destrói o gráfico atual
-  if (!vendasFiltradas || vendasFiltradas.length === 0) {
+  const lista = Array.isArray(vendasFiltradas) ? vendasFiltradas : [];
+
+  // Se não tem dados, limpa
+  if (!lista.length) {
     if (chartFaturamentoMensal) {
       chartFaturamentoMensal.destroy();
       chartFaturamentoMensal = null;
     }
+    const ctx = canvas.getContext("2d");
+    ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
 
-  const mapaMesValor = {};
+  // ===== Helpers (datas locais) =====
+  function parseISODateLocal(iso) {
+    if (!iso) return null;
+    const s = String(iso).slice(0, 10);
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function isoFromDateLocal(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+  function ymFromDateLocal(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }
+  function addDays(d, n) {
+    const x = new Date(d.getTime());
+    x.setDate(x.getDate() + n);
+    return x;
+  }
+  function monthsBetween(startDate, endDate) {
+    const out = [];
+    const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    while (cur.getTime() <= end.getTime()) {
+      out.push(new Date(cur.getTime()));
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return out;
+  }
 
-  vendasFiltradas.forEach((v) => {
-    const dataIso = v.data || "";
-    if (!dataIso || dataIso.length < 7) return;
-    const anoMes = dataIso.slice(0, 7); // "aaaa-mm"
+  // ===== Range preferencial: o período do filtro =====
+  const startIso =
+    (typeof filterStartInput !== "undefined" && filterStartInput)
+      ? (filterStartInput.value || "")
+      : "";
+  const endIso =
+    (typeof filterEndInput !== "undefined" && filterEndInput)
+      ? (filterEndInput.value || "")
+      : "";
+
+  let rangeStart = parseISODateLocal(startIso);
+  let rangeEnd = parseISODateLocal(endIso);
+
+  // fallback: se não tiver filtro preenchido por algum motivo, usa min/max dos dados
+  if (!rangeStart || !rangeEnd) {
+    let minTs = null;
+    let maxTs = null;
+    lista.forEach((v) => {
+      const ts = Number(v.dataTimestamp || 0);
+      if (!ts) return;
+      if (minTs === null || ts < minTs) minTs = ts;
+      if (maxTs === null || ts > maxTs) maxTs = ts;
+    });
+    if (minTs != null && maxTs != null) {
+      rangeStart = new Date(minTs);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd = new Date(maxTs);
+      rangeEnd.setHours(0, 0, 0, 0);
+    }
+  }
+
+  if (rangeStart) rangeStart.setHours(0, 0, 0, 0);
+  if (rangeEnd) rangeEnd.setHours(0, 0, 0, 0);
+
+  const hasRange =
+    !!(rangeStart && rangeEnd && rangeEnd.getTime() >= rangeStart.getTime());
+
+  const rangeDays = hasRange
+    ? Math.floor((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
+    : 0;
+
+  // Heurística (igual despesas):
+  // - até 45 dias -> diário
+  // - acima -> mensal
+  const useDaily = hasRange && rangeDays <= 45;
+
+  // ===== Agregações =====
+  const porDia = {};
+  const porMes = {};
+
+  lista.forEach((v) => {
     const valor = Number(v.valorTotal || 0);
-    if (!mapaMesValor[anoMes]) mapaMesValor[anoMes] = 0;
-    mapaMesValor[anoMes] += valor;
+    if (!isFinite(valor)) return;
+
+    // data da venda
+    let dt = null;
+    if (v.data) dt = parseISODateLocal(v.data);
+    if (!dt && v.dataTimestamp) {
+      const x = new Date(Number(v.dataTimestamp));
+      if (!isNaN(x.getTime())) dt = x;
+    }
+    if (!dt) return;
+
+    dt.setHours(0, 0, 0, 0);
+
+    if (useDaily) {
+      const key = isoFromDateLocal(dt); // YYYY-MM-DD
+      porDia[key] = (porDia[key] || 0) + valor;
+    } else {
+      const key = ymFromDateLocal(dt); // YYYY-MM
+      porMes[key] = (porMes[key] || 0) + valor;
+    }
   });
 
-  const chavesOrdenadas = Object.keys(mapaMesValor).sort(); // 2025-01, 2025-02...
-  if (chavesOrdenadas.length === 0) {
+  // ===== Monta labels/valores preenchendo lacunas =====
+  let labels = [];
+  let valores = [];
+
+  if (hasRange) {
+    if (useDaily) {
+      const keys = [];
+      for (let i = 0; i < rangeDays; i++) {
+        const d = addDays(rangeStart, i);
+        keys.push(isoFromDateLocal(d));
+      }
+      labels = keys.map((iso) => {
+        const dd = iso.slice(8, 10);
+        const mm = iso.slice(5, 7);
+        return `${dd}/${mm}`;
+      });
+      valores = keys.map((k) => Number(porDia[k] || 0));
+    } else {
+      const meses = monthsBetween(rangeStart, rangeEnd);
+      const keys = meses.map((d) => ymFromDateLocal(d));
+      labels = keys.map((ym) => {
+        const [ano, mes] = ym.split("-");
+        return `${mes}/${ano}`;
+      });
+      valores = keys.map((k) => Number(porMes[k] || 0));
+    }
+  } else {
+    // sem range: só usa as chaves existentes
+    if (useDaily) {
+      const keys = Object.keys(porDia).sort();
+      labels = keys.map((iso) => {
+        const dd = iso.slice(8, 10);
+        const mm = iso.slice(5, 7);
+        return `${dd}/${mm}`;
+      });
+      valores = keys.map((k) => Number(porDia[k] || 0));
+    } else {
+      const keys = Object.keys(porMes).sort();
+      labels = keys.map((ym) => {
+        const [ano, mes] = ym.split("-");
+        return `${mes}/${ano}`;
+      });
+      valores = keys.map((k) => Number(porMes[k] || 0));
+    }
+  }
+
+  // ===== Desenha / Atualiza o Chart (recria se mudou modo) =====
+  const newMode = useDaily ? "daily" : "monthly";
+  if (chartFaturamentoMensal && chartFaturamentoMensal.__cg_mode !== newMode) {
+    chartFaturamentoMensal.destroy();
+    chartFaturamentoMensal = null;
+  }
+
+  if (!labels.length) {
     if (chartFaturamentoMensal) {
       chartFaturamentoMensal.destroy();
       chartFaturamentoMensal = null;
     }
+    const ctx = canvas.getContext("2d");
+    ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
-
-  const labels = chavesOrdenadas.map((ym) => {
-    const [ano, mes] = ym.split("-");
-    return `${mes}/${ano}`;
-  });
-  const valores = chavesOrdenadas.map((ym) => mapaMesValor[ym]);
 
   if (chartFaturamentoMensal) {
     chartFaturamentoMensal.data.labels = labels;
     chartFaturamentoMensal.data.datasets[0].data = valores;
     chartFaturamentoMensal.update();
-  } else {
-    const ctx = canvas.getContext("2d");
-    chartFaturamentoMensal = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Faturamento (R$)",
-            data: valores,
-            fill: false,
-            tension: 0.2
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: false
-          }
-        },
-        scales: {
-          y: {
-            ticks: {
-              beginAtZero: true
+    chartFaturamentoMensal.__cg_mode = newMode;
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  chartFaturamentoMensal = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Faturamento (R$)",
+          data: valores,
+          fill: false,
+          tension: 0.2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function (context) {
+              const v = Number(context.parsed?.y || 0);
+              return `${formatarMoedaBR(v)}`;
             }
           }
         }
+      },
+      scales: {
+        y: { beginAtZero: true }
       }
-    });
-  }
+    }
+  });
+
+  chartFaturamentoMensal.__cg_mode = newMode;
 }
 
 // Pizza de distribuição de vendas por produto (por quantidade)
