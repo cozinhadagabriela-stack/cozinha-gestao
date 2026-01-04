@@ -171,15 +171,39 @@ function addDaysISO(iso, deltaDays) {
 
 // Retorna o período anterior equivalente ao período [start, end]
 // Ex.: 10/02 a 20/02 (11 dias) -> 30/01 a 09/02
+function shiftMonthISO(iso, deltaMonths) {
+  if (!iso) return null;
+  const parts = String(iso).split("-");
+  if (parts.length !== 3) return null;
+
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+
+  if (!isFinite(y) || !isFinite(m) || !isFinite(d)) return null;
+
+  // Começa sempre no 1º dia do mês para evitar “pulos” do Date (ex: 31 -> mês seguinte)
+  const base = new Date(y, m - 1, 1);
+  const target = new Date(base.getFullYear(), base.getMonth() + deltaMonths, 1);
+
+  // Ajusta o dia para o último dia do mês de destino, se necessário (ex: 31 -> 28/29)
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  const day = Math.min(d, lastDay);
+
+  const finalDate = new Date(target.getFullYear(), target.getMonth(), day);
+  return toISODateLocal(finalDate);
+}
+
+// ✅ Período anterior: MESMAS DATAS do MÊS ANTERIOR
+// Ex: 01/01 a 10/01 => 01/12 a 10/12
 function obterPeriodoAnteriorEquivalente(startIso, endIso) {
   const dias = diffDaysInclusive(startIso, endIso);
   if (!dias) return { prevStart: null, prevEnd: null, dias: null };
 
-  const prevEnd = addDaysISO(startIso, -1);
-  if (!prevEnd) return { prevStart: null, prevEnd: null, dias: null };
+  const prevStart = shiftMonthISO(startIso, -1);
+  const prevEnd = shiftMonthISO(endIso, -1);
 
-  const prevStart = addDaysISO(prevEnd, -(dias - 1));
-  if (!prevStart) return { prevStart: null, prevEnd: null, dias: null };
+  if (!prevStart || !prevEnd) return { prevStart: null, prevEnd: null, dias: null };
 
   return { prevStart, prevEnd, dias };
 }
