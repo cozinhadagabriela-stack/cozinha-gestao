@@ -1049,19 +1049,102 @@ function atualizarGraficosDespesas(dados) {
   const fornCanvas = document.getElementById("chart-desp-fornecedores");
 
   if (!mensalCanvas && !catCanvas && !fornCanvas) return;
+  if (typeof Chart === "undefined") return;
 
+  // ===== Helpers (datas locais) =====
+  function parseISODateLocal(iso) {
+    if (!iso) return null;
+    const s = String(iso).slice(0, 10);
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function isoFromDateLocal(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+  function ymFromDateLocal(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }
+  function addDays(d, n) {
+    const x = new Date(d.getTime());
+    x.setDate(x.getDate() + n);
+    return x;
+  }
+  function monthsBetween(startDate, endDate) {
+    const out = [];
+    const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    while (cur.getTime() <= end.getTime()) {
+      out.push(new Date(cur.getTime()));
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return out;
+  }
+
+  // ===== Agregações =====
   let total = 0;
   const porCategoria = {};
   const porFornecedor = {};
+
+  // Para o gráfico de linha (diário ou mensal)
+  const porDia = {};
   const porMes = {};
+
+  // Range preferencial: o período do filtro (porque quando o usuário filtra,
+  // ele quer que TUDO siga esse período)
+  const startIso = despFilterStartInput?.value || "";
+  const endIso = despFilterEndInput?.value || "";
+
+  let rangeStart = parseISODateLocal(startIso);
+  let rangeEnd = parseISODateLocal(endIso);
+
+  // fallback: se por algum motivo não tiver filtro preenchido,
+  // usa o min/max dos dados
+  if (!rangeStart || !rangeEnd) {
+    let minTs = null;
+    let maxTs = null;
+    lista.forEach((d) => {
+      const ts = Number(d.dataPagamentoTimestamp || 0);
+      if (!ts) return;
+      if (minTs === null || ts < minTs) minTs = ts;
+      if (maxTs === null || ts > maxTs) maxTs = ts;
+    });
+    if (minTs != null && maxTs != null) {
+      rangeStart = new Date(minTs);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd = new Date(maxTs);
+      rangeEnd.setHours(0, 0, 0, 0);
+    }
+  }
+
+  // normaliza range
+  if (rangeStart) rangeStart.setHours(0, 0, 0, 0);
+  if (rangeEnd) rangeEnd.setHours(0, 0, 0, 0);
+
+  // Se range inválido, não desenha linha
+  const hasRange = !!(rangeStart && rangeEnd && rangeEnd.getTime() >= rangeStart.getTime());
+  const rangeDays =
+    hasRange ? Math.floor((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1 : 0;
+
+  // Heurística:
+  // - até 45 dias => mostra diário (fica legível)
+  // - acima disso => agrupa por mês
+  const useDaily = hasRange && rangeDays <= 45;
 
   lista.forEach((d) => {
     const v = Number(d.valorTotal || 0);
-    if (isNaN(v)) return;
+    if (!isNaN(v)) {
+      total += v;
+    }
 
-    total += v;
-
-    const cat = (d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria";
+    const cat =
+      (d.itemDespesaCategoria || "Sem categoria").trim() || "Sem categoria";
     if (!porCategoria[cat]) porCategoria[cat] = 0;
     porCategoria[cat] += v;
 
@@ -1069,76 +1152,126 @@ function atualizarGraficosDespesas(dados) {
     if (!porFornecedor[forn]) porFornecedor[forn] = 0;
     porFornecedor[forn] += v;
 
-    let ym = "";
-    if (d.dataPagamento && String(d.dataPagamento).length >= 7) {
-      ym = String(d.dataPagamento).slice(0, 7);
-    } else if (d.dataPagamentoTimestamp) {
-      const dt = new Date(Number(d.dataPagamentoTimestamp));
-      if (!isNaN(dt.getTime())) {
-        const ano = dt.getFullYear();
-        const mes = String(dt.getMonth() + 1).padStart(2, "0");
-        ym = `${ano}-${mes}`;
-      }
+    // data da despesa
+    let dt = null;
+    if (d.dataPagamento) {
+      dt = parseISODateLocal(d.dataPagamento);
     }
-    if (ym) {
-      if (!porMes[ym]) porMes[ym] = 0;
-      porMes[ym] += v;
+    if (!dt && d.dataPagamentoTimestamp) {
+      const x = new Date(Number(d.dataPagamentoTimestamp));
+      if (!isNaN(x.getTime())) dt = x;
+    }
+    if (!dt) return;
+
+    dt.setHours(0, 0, 0, 0);
+
+    if (useDaily) {
+      const key = isoFromDateLocal(dt); // YYYY-MM-DD
+      if (!porDia[key]) porDia[key] = 0;
+      porDia[key] += v;
+    } else {
+      const key = ymFromDateLocal(dt); // YYYY-MM
+      if (!porMes[key]) porMes[key] = 0;
+      porMes[key] += v;
     }
   });
 
+  // ===== Gráfico de linha (mensal/diário) =====
   if (mensalCanvas) {
-    if (chartDespMensal) {
-      chartDespMensal.destroy();
-      chartDespMensal = null;
-    }
-
-    const chavesMes = Object.keys(porMes).sort();
-    if (chavesMes.length) {
-      const labels = chavesMes.map((ym) => {
-        const [ano, mes] = ym.split("-");
-        return `${mes}/${ano}`;
-      });
-      const valores = chavesMes.map((ym) => porMes[ym]);
-
-      const ctxMes = mensalCanvas.getContext("2d");
-      chartDespMensal = new Chart(ctxMes, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "Gastos (R$)",
-              data: valores,
-              fill: false,
-              tension: 0.2
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: function (context) {
-                  const v = Number(context.parsed?.y || 0);
-                  return `${formatarMoedaBR(v)}`;
-                }
-              }
-            }
-          },
-          scales: {
-            y: { beginAtZero: true }
-          }
-        }
-      });
-    } else {
+    if (!hasRange) {
+      if (chartDespMensal) {
+        chartDespMensal.destroy();
+        chartDespMensal = null;
+      }
       const ctx = mensalCanvas.getContext("2d");
       ctx && ctx.clearRect(0, 0, mensalCanvas.width, mensalCanvas.height);
+    } else {
+      // gera labels/valores preenchendo lacunas
+      let labels = [];
+      let valores = [];
+
+      if (useDaily) {
+        const keys = [];
+        for (let i = 0; i < rangeDays; i++) {
+          const d = addDays(rangeStart, i);
+          keys.push(isoFromDateLocal(d));
+        }
+        labels = keys.map((iso) => {
+          const dd = iso.slice(8, 10);
+          const mm = iso.slice(5, 7);
+          return `${dd}/${mm}`;
+        });
+        valores = keys.map((k) => Number(porDia[k] || 0));
+      } else {
+        const meses = monthsBetween(rangeStart, rangeEnd);
+        const keys = meses.map((d) => ymFromDateLocal(d));
+        labels = keys.map((ym) => {
+          const [ano, mes] = ym.split("-");
+          return `${mes}/${ano}`;
+        });
+        valores = keys.map((k) => Number(porMes[k] || 0));
+      }
+
+      // recria se mudou o "modo" (diário x mensal)
+      const newMode = useDaily ? "daily" : "monthly";
+      if (chartDespMensal && chartDespMensal.__cg_mode !== newMode) {
+        chartDespMensal.destroy();
+        chartDespMensal = null;
+      }
+
+      if (labels.length) {
+        if (chartDespMensal) {
+          chartDespMensal.data.labels = labels;
+          chartDespMensal.data.datasets[0].data = valores;
+          chartDespMensal.update();
+        } else {
+          const ctxMes = mensalCanvas.getContext("2d");
+          chartDespMensal = new Chart(ctxMes, {
+            type: "line",
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: "Gastos (R$)",
+                  data: valores,
+                  fill: false,
+                  tension: 0.2
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: function (context) {
+                      const v = Number(context.parsed?.y || 0);
+                      return `${formatarMoedaBR(v)}`;
+                    }
+                  }
+                }
+              },
+              scales: {
+                y: { beginAtZero: true }
+              }
+            }
+          });
+          chartDespMensal.__cg_mode = newMode;
+        }
+      } else {
+        if (chartDespMensal) {
+          chartDespMensal.destroy();
+          chartDespMensal = null;
+        }
+        const ctx = mensalCanvas.getContext("2d");
+        ctx && ctx.clearRect(0, 0, mensalCanvas.width, mensalCanvas.height);
+      }
     }
   }
 
+  // ===== Pizza por categoria =====
   if (catCanvas) {
     const ctxCat = catCanvas.getContext("2d");
 
@@ -1210,7 +1343,7 @@ function atualizarGraficosDespesas(dados) {
     }
   }
 
-  // ✅ Mantido em BARRAS (Top 5 fornecedores) — sem alterar
+  // ===== Barras Top 5 fornecedores (mantido) =====
   if (fornCanvas) {
     const ctxForn = fornCanvas.getContext("2d");
 
