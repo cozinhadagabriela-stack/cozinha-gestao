@@ -247,7 +247,6 @@
           </div>
         </div>
 
-
         <!-- COMPARAÇÃO (mesmas datas do mês anterior) -->
         <h4>Comparação vs mesmas datas do mês anterior</h4>
         <div class="kpi-grid">
@@ -549,30 +548,115 @@
           </div>
         </section>
 
-        <!-- 2) Indicadores do período filtrado (agora no topo da página) -->
+        <!-- 2) Indicadores do período filtrado (topo) + NOVOS KPIs -->
         <section class="subsection">
-          <h3>Indicadores do período filtrado</h3>
           <div class="kpi-container">
+            <h4>Indicadores do período filtrado</h4>
+
             <div class="kpi-grid">
               <div class="kpi-card">
                 <span class="kpi-label">Total de despesas (R$)</span>
                 <span class="kpi-value" id="kpi-desp-total">R$ 0,00</span>
               </div>
+
               <div class="kpi-card">
                 <span class="kpi-label">Matéria-prima + Embalagens</span>
                 <span class="kpi-value" id="kpi-desp-mp-emb">R$ 0,00</span>
               </div>
+
               <div class="kpi-card">
                 <span class="kpi-label">Despesas fixas</span>
                 <span class="kpi-value" id="kpi-desp-fixas">R$ 0,00</span>
               </div>
+
               <div class="kpi-card">
                 <span class="kpi-label">Nº de lançamentos</span>
                 <span class="kpi-value" id="kpi-desp-num-lanc">0</span>
               </div>
+
               <div class="kpi-card">
                 <span class="kpi-label">Fornecedor com maior gasto</span>
                 <span class="kpi-value" id="kpi-desp-top-forn">—</span>
+              </div>
+
+              <!-- ✅ NOVOS KPIs (IDs compatíveis com despesas.js) -->
+              <div class="kpi-card">
+                <span class="kpi-label">Ticket médio por lançamento</span>
+                <span class="kpi-value" id="kpi-desp-media-lanc">R$ 0,00</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Média de gastos por dia</span>
+                <span class="kpi-value" id="kpi-desp-media-dia">R$ 0,00</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Fornecedores únicos</span>
+                <span class="kpi-value" id="kpi-desp-forn-unicos">0</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Categoria com maior gasto</span>
+                <span class="kpi-value" id="kpi-desp-top-cat">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">% Matéria-prima + Embalagens</span>
+                <span class="kpi-value" id="kpi-desp-pct-mpemb">0,0%</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">% Despesas fixas</span>
+                <span class="kpi-value" id="kpi-desp-pct-fixas">0,0%</span>
+              </div>
+            </div>
+
+            <!-- ✅ COMPARAÇÃO (mesmas datas do mês anterior) -->
+            <h4>Comparação vs mesmas datas do mês anterior</h4>
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <span class="kpi-label">Total de despesas vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-vs-total">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Matéria-prima + Embalagens vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-vs-mpemb">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Despesas fixas vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-vs-fixas">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Lançamentos vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-vs-num-lanc">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Ticket médio vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-vs-media-lanc">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Fornecedores únicos vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-vs-forn-unicos">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">% MP+Emb vs anterior (p.p.)</span>
+                <span class="kpi-value" id="kpi-desp-vs-pct-mpemb">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Concentração Top 1 fornecedor (p.p.)</span>
+                <span class="kpi-value" id="kpi-desp-vs-top-forn-conc">—</span>
+              </div>
+
+              <div class="kpi-card">
+                <span class="kpi-label">Categoria #1 (% gasto) (p.p.)</span>
+                <span class="kpi-value" id="kpi-desp-vs-top-cat-conc">—</span>
               </div>
             </div>
           </div>
@@ -1048,4 +1132,3 @@
   </script>
 </body>
 </html>
-
