@@ -77,6 +77,17 @@ const kpiDespFixasEl        = document.getElementById("kpi-desp-fixas");
 const kpiDespNumLancEl      = document.getElementById("kpi-desp-num-lanc");
 const kpiDespTopFornEl      = document.getElementById("kpi-desp-top-forn");
 
+
+// ----------------------
+// KPIs de comparação (mesmas datas do mês anterior)
+// ----------------------
+const kpiDespCompTotalEl     = document.getElementById("kpi-desp-comp-total");
+const kpiDespCompMpEmbEl     = document.getElementById("kpi-desp-comp-mp-emb");
+const kpiDespCompFixasEl     = document.getElementById("kpi-desp-comp-fixas");
+const kpiDespCompNumLancEl   = document.getElementById("kpi-desp-comp-num-lanc");
+const kpiDespCompTop1ValorEl = document.getElementById("kpi-desp-comp-top1-valor");
+const kpiDespCompTop1ShareEl = document.getElementById("kpi-desp-comp-top1-share");
+
 const kpiDespCategoriasTbody    = document.getElementById("kpi-desp-categorias-tbody");
 const kpiDespFornecedoresTbody  = document.getElementById("kpi-desp-fornecedores-tbody");
 
@@ -883,6 +894,256 @@ if (btnDespClearFilters) {
 // ----------------------
 // Indicadores / resumos / gráficos de despesas
 // ----------------------
+
+// ----------------------
+// Comparação (mesmas datas do mês anterior)
+// ----------------------
+function despFormatarNumeroBR(valor, casas = 0) {
+  const n = Number(valor || 0);
+  if (!isFinite(n)) return "0";
+  return n.toFixed(casas).replace(".", ",");
+}
+
+function despShiftMonthISO(iso, deltaMonths) {
+  if (!iso) return null;
+  const parts = String(iso).slice(0, 10).split("-");
+  if (parts.length !== 3) return null;
+
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!isFinite(y) || !isFinite(m) || !isFinite(d)) return null;
+
+  // Começa no 1º dia do mês para evitar “pulos” (ex: 31 -> mês seguinte)
+  const base = new Date(y, m - 1, 1);
+  const target = new Date(base.getFullYear(), base.getMonth() + deltaMonths, 1);
+
+  // Ajusta o dia para o último dia do mês de destino, se necessário (ex: 31 -> 28/29)
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  const day = Math.min(d, lastDay);
+
+  const finalDate = new Date(target.getFullYear(), target.getMonth(), day);
+  return toISODateLocal(finalDate);
+}
+
+function despObterPeriodoAnteriorEquivalente(startIso, endIso) {
+  if (!startIso || !endIso) return { prevStart: null, prevEnd: null };
+
+  const prevStart = despShiftMonthISO(startIso, -1);
+  const prevEnd = despShiftMonthISO(endIso, -1);
+
+  if (!prevStart || !prevEnd) return { prevStart: null, prevEnd: null };
+  return { prevStart, prevEnd };
+}
+
+function despFormatarDelta(curr, prev, isMoney = false, casas = 0) {
+  const c = Number(curr || 0);
+  const p = Number(prev || 0);
+  if (!isFinite(c) || !isFinite(p)) return "—";
+
+  const delta = c - p;
+
+  let percTxt = "—";
+  if (p !== 0) {
+    const perc = (delta / p) * 100;
+    percTxt = (perc >= 0 ? "+" : "") + despFormatarNumeroBR(perc, 1) + "%";
+  }
+
+  let deltaTxt = "—";
+  if (isMoney) {
+    const abs = Math.abs(delta);
+    deltaTxt = (delta >= 0 ? "+" : "-") + formatarMoedaBR(abs);
+  } else {
+    deltaTxt = (delta >= 0 ? "+" : "") + despFormatarNumeroBR(delta, casas);
+  }
+
+  return `${deltaTxt} (${percTxt})`;
+}
+
+function despFormatarPontosPercentuais(currPerc, prevPerc) {
+  const c = Number(currPerc || 0);
+  const p = Number(prevPerc || 0);
+  if (!isFinite(c) || !isFinite(p)) return "—";
+  const dp = c - p;
+  return (dp >= 0 ? "+" : "") + despFormatarNumeroBR(dp, 1) + " p.p.";
+}
+
+function despAplicarFiltrosEmMemoriaPeriodo(startIso, endIso) {
+  if (!despesasCache || despesasCache.length === 0) return [];
+
+  let filtradas = despesasCache.slice();
+
+  if (startIso) {
+    const dStart = new Date(startIso);
+    dStart.setHours(0, 0, 0, 0);
+    const tsStart = dStart.getTime();
+
+    filtradas = filtradas.filter((d) => {
+      const ts = d.dataPagamentoTimestamp || 0;
+      return ts >= tsStart;
+    });
+  }
+
+  if (endIso) {
+    const dEnd = new Date(endIso);
+    dEnd.setHours(23, 59, 59, 999);
+    const tsEnd = dEnd.getTime();
+
+    filtradas = filtradas.filter((d) => {
+      const ts = d.dataPagamentoTimestamp || 0;
+      return ts <= tsEnd;
+    });
+  }
+
+  // Mantém os demais filtros (fornecedor / descrição / marca)
+  const fornecedorFiltro = despFilterFornecedorSelect?.value || "";
+  if (fornecedorFiltro) {
+    filtradas = filtradas.filter((d) => d.fornecedorId === fornecedorFiltro);
+  }
+
+  const descFiltro = (despFilterDescricaoInput?.value || "")
+    .trim()
+    .toLowerCase();
+  if (descFiltro) {
+    filtradas = filtradas.filter((d) =>
+      (d.descricaoItem || "").toLowerCase().includes(descFiltro)
+    );
+  }
+
+  const marcaFiltro = (despFilterMarcaInput?.value || "")
+    .trim()
+    .toLowerCase();
+  if (marcaFiltro) {
+    filtradas = filtradas.filter((d) =>
+      (d.marca || "").toLowerCase().includes(marcaFiltro)
+    );
+  }
+
+  filtradas.sort(
+    (a, b) => (a.dataPagamentoTimestamp || 0) - (b.dataPagamentoTimestamp || 0)
+  );
+
+  return filtradas;
+}
+
+function despCalcularMetricasComparacao(lista) {
+  const dados = Array.isArray(lista) ? lista : [];
+
+  let total = 0;
+  let totalMpEmb = 0;
+  let totalFixas = 0;
+  const gastoPorFornecedor = {};
+
+  dados.forEach((d) => {
+    const v = Number(d.valorTotal || 0);
+    if (!isNaN(v)) total += v;
+
+    const cat = (d.itemDespesaCategoria || "").trim();
+    if (cat === "Matéria-prima" || cat === "Embalagens") {
+      totalMpEmb += v;
+    }
+    if (cat === "Despesas fixas") {
+      totalFixas += v;
+    }
+
+    const fornNome = (d.fornecedorNome || "—").trim();
+    if (!gastoPorFornecedor[fornNome]) gastoPorFornecedor[fornNome] = 0;
+    gastoPorFornecedor[fornNome] += v;
+  });
+
+  // Top fornecedor
+  let topFornNome = "—";
+  let topFornValor = 0;
+  for (const nome in gastoPorFornecedor) {
+    if (gastoPorFornecedor[nome] > topFornValor) {
+      topFornValor = gastoPorFornecedor[nome];
+      topFornNome = nome;
+    }
+  }
+
+  const numLanc = dados.length;
+  const topFornShare = total > 0 ? (topFornValor / total) * 100 : 0;
+
+  return {
+    total,
+    totalMpEmb,
+    totalFixas,
+    numLanc,
+    gastoPorFornecedor,
+    topFornNome,
+    topFornValor,
+    topFornShare,
+  };
+}
+
+function despLimparKPIsComparacao() {
+  if (!kpiDespCompTotalEl && !kpiDespCompMpEmbEl && !kpiDespCompFixasEl &&
+      !kpiDespCompNumLancEl && !kpiDespCompTop1ValorEl && !kpiDespCompTop1ShareEl) return;
+
+  if (kpiDespCompTotalEl) kpiDespCompTotalEl.textContent = "—";
+  if (kpiDespCompMpEmbEl) kpiDespCompMpEmbEl.textContent = "—";
+  if (kpiDespCompFixasEl) kpiDespCompFixasEl.textContent = "—";
+  if (kpiDespCompNumLancEl) kpiDespCompNumLancEl.textContent = "—";
+  if (kpiDespCompTop1ValorEl) kpiDespCompTop1ValorEl.textContent = "—";
+  if (kpiDespCompTop1ShareEl) kpiDespCompTop1ShareEl.textContent = "—";
+}
+
+function despAtualizarKPIsComparacao(metricAtual, metricAnterior) {
+  if (!kpiDespCompTotalEl && !kpiDespCompMpEmbEl && !kpiDespCompFixasEl &&
+      !kpiDespCompNumLancEl && !kpiDespCompTop1ValorEl && !kpiDespCompTop1ShareEl) return;
+
+  const a = metricAtual || {};
+  const p = metricAnterior || {};
+
+  // Total
+  if (kpiDespCompTotalEl) {
+    const deltaTxt = despFormatarDelta(a.total, p.total, true, 2);
+    kpiDespCompTotalEl.textContent = `${formatarMoedaBR(a.total)} • ${deltaTxt}`;
+  }
+
+  // Matéria-prima + Embalagens
+  if (kpiDespCompMpEmbEl) {
+    const deltaTxt = despFormatarDelta(a.totalMpEmb, p.totalMpEmb, true, 2);
+    kpiDespCompMpEmbEl.textContent = `${formatarMoedaBR(a.totalMpEmb)} • ${deltaTxt}`;
+  }
+
+  // Fixas
+  if (kpiDespCompFixasEl) {
+    const deltaTxt = despFormatarDelta(a.totalFixas, p.totalFixas, true, 2);
+    kpiDespCompFixasEl.textContent = `${formatarMoedaBR(a.totalFixas)} • ${deltaTxt}`;
+  }
+
+  // Nº de lançamentos
+  if (kpiDespCompNumLancEl) {
+    const deltaTxt = despFormatarDelta(a.numLanc, p.numLanc, false, 0);
+    kpiDespCompNumLancEl.textContent = `${String(a.numLanc || 0)} • ${deltaTxt}`;
+  }
+
+  // Fornecedor #1 (valor)
+  if (kpiDespCompTop1ValorEl) {
+    if (!a.topFornNome || a.topFornNome === "—" || !isFinite(Number(a.topFornValor)) || a.topFornValor <= 0) {
+      kpiDespCompTop1ValorEl.textContent = "—";
+    } else {
+      const prevValorMesmoForn = Number((p.gastoPorFornecedor || {})[a.topFornNome] || 0);
+      const deltaTxt = despFormatarDelta(a.topFornValor, prevValorMesmoForn, true, 2);
+      kpiDespCompTop1ValorEl.textContent = `${a.topFornNome}: ${formatarMoedaBR(a.topFornValor)} • ${deltaTxt}`;
+    }
+  }
+
+  // Participação do Top 1 fornecedor (share)
+  if (kpiDespCompTop1ShareEl) {
+    if (!a.topFornNome || a.topFornNome === "—" || !isFinite(Number(a.topFornValor)) || a.topFornValor <= 0 || !isFinite(Number(a.total)) || a.total <= 0) {
+      kpiDespCompTop1ShareEl.textContent = "—";
+    } else {
+      const shareAtual = a.topFornShare || 0;
+      const prevValorMesmoForn = Number((p.gastoPorFornecedor || {})[a.topFornNome] || 0);
+      const sharePrevMesmoForn = (p.total && p.total > 0) ? (prevValorMesmoForn / p.total) * 100 : 0;
+      const dp = despFormatarPontosPercentuais(shareAtual, sharePrevMesmoForn);
+      kpiDespCompTop1ShareEl.textContent = `${a.topFornNome}: ${formatarPercent(shareAtual)} • ${dp}`;
+    }
+  }
+}
+
 function atualizarResumoDespesas(dados) {
   atualizarIndicadoresDespesas(dados);
   atualizarResumosTabelaDespesas(dados);
@@ -943,6 +1204,39 @@ function atualizarIndicadoresDespesas(dados) {
       kpiDespTopFornEl.textContent = "—";
     }
   }
+
+
+  // ----------------------
+  // KPIs de comparação (mesmas datas do mês anterior)
+  // ----------------------
+  const periodoPrev = despObterPeriodoAnteriorEquivalente(
+    despFilterStartInput?.value || "",
+    despFilterEndInput?.value || ""
+  );
+
+  if (periodoPrev.prevStart && periodoPrev.prevEnd) {
+    const listaPrev = despAplicarFiltrosEmMemoriaPeriodo(
+      periodoPrev.prevStart,
+      periodoPrev.prevEnd
+    );
+
+    const metricAtual = {
+      total,
+      totalMpEmb,
+      totalFixas,
+      numLanc,
+      gastoPorFornecedor,
+      topFornNome,
+      topFornValor,
+      topFornShare: total > 0 ? (topFornValor / total) * 100 : 0,
+    };
+
+    const metricAnterior = despCalcularMetricasComparacao(listaPrev);
+    despAtualizarKPIsComparacao(metricAtual, metricAnterior);
+  } else {
+    despLimparKPIsComparacao();
+  }
+
 }
 
 function atualizarResumosTabelaDespesas(dados) {
