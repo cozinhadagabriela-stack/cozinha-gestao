@@ -273,22 +273,6 @@
             <span class="kpi-label">Clientes únicos vs anterior</span>
             <span class="kpi-value" id="kpi-comp-clientes-unicos">—</span>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Concentração Top 1 cliente</span>
-            <span class="kpi-value" id="kpi-comp-top1-share">—</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Concentração Top 3 clientes</span>
-            <span class="kpi-value" id="kpi-comp-top3-share">—</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Produto #1 (% fatur.)</span>
-            <span class="kpi-value" id="kpi-comp-produto1-share">—</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Cidade #1 (% fatur.)</span>
-            <span class="kpi-value" id="kpi-comp-cidade1-share">—</span>
-          </div>
         </div>
 
         <!-- GRÁFICOS (menores) -->
@@ -304,6 +288,13 @@
             <h4>Distribuição de vendas por produto</h4>
             <div class="chart-wrapper">
               <canvas id="chart-produtos"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <h4>Top 5 clientes</h4>
+            <div class="chart-wrapper">
+              <canvas id="chart-top-clientes"></canvas>
             </div>
           </div>
         </div>
