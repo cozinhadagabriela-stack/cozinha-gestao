@@ -75,6 +75,7 @@
         <button id="tab-extrato" class="tab">Extrato / Relatório</button>
         <button id="tab-estoque" class="tab">Estoque</button>
         <button id="tab-despesas" class="tab">Despesas</button>
+        <button id="tab-fornecedores" class="tab">Fornecedores</button>
         <button id="tab-clientes" class="tab">Clientes</button>
         <button id="tab-produtos" class="tab">Produtos</button>
         <button id="tab-formas" class="tab">Formas de pagamento</button>
@@ -552,8 +553,12 @@
                 <span class="kpi-value" id="kpi-desp-total">R$ 0,00</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-label">Matéria-prima + Embalagens</span>
-                <span class="kpi-value" id="kpi-desp-mp-emb">R$ 0,00</span>
+                <span class="kpi-label">Matéria-prima</span>
+                <span class="kpi-value" id="kpi-desp-mp">R$ 0,00</span>
+              </div>
+              <div class="kpi-card">
+                <span class="kpi-label">Embalagens</span>
+                <span class="kpi-value" id="kpi-desp-emb">R$ 0,00</span>
               </div>
               <div class="kpi-card">
                 <span class="kpi-label">Despesas fixas</span>
@@ -566,6 +571,10 @@
               <div class="kpi-card">
                 <span class="kpi-label">Fornecedor com maior gasto</span>
                 <span class="kpi-value" id="kpi-desp-top-forn">—</span>
+              </div>
+              <div class="kpi-card">
+                <span class="kpi-label">Combustível</span>
+                <span class="kpi-value" id="kpi-desp-comb">R$ 0,00</span>
               </div>
             </div>
           </div>
@@ -581,8 +590,12 @@
                 <span class="kpi-value" id="kpi-desp-comp-total">—</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-label">Matéria-prima + Embalagens vs anterior</span>
-                <span class="kpi-value" id="kpi-desp-comp-mp-emb">—</span>
+                <span class="kpi-label">Matéria-prima vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-comp-mp">—</span>
+              </div>
+              <div class="kpi-card">
+                <span class="kpi-label">Embalagens vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-comp-emb">—</span>
               </div>
               <div class="kpi-card">
                 <span class="kpi-label">Despesas fixas vs anterior</span>
@@ -593,12 +606,12 @@
                 <span class="kpi-value" id="kpi-desp-comp-num-lanc">—</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-label">Fornecedor #1 (valor) vs anterior</span>
-                <span class="kpi-value" id="kpi-desp-comp-top1-valor">—</span>
+                <span class="kpi-label">Fornecedor com maior gasto vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-comp-top-forn">—</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-label">Participação do Top 1 fornecedor</span>
-                <span class="kpi-value" id="kpi-desp-comp-top1-share">—</span>
+                <span class="kpi-label">Combustível vs anterior</span>
+                <span class="kpi-value" id="kpi-desp-comp-comb">—</span>
               </div>
             </div>
           </div>
@@ -667,131 +680,6 @@
                 </tbody>
               </table>
             </div>
-          </div>
-        </section>
-
-        <hr />
-
-        <!-- 5) Cadastro de fornecedores -->
-        <section class="subsection">
-          <h3>Cadastro de fornecedores</h3>
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="forn-nome">Nome do fornecedor</label>
-              <input
-                type="text"
-                id="forn-nome"
-                placeholder="Ex.: Atacadão, Mercado X, Embalagens Y"
-              />
-            </div>
-          </div>
-          <button id="btn-save-fornecedor" class="btn-primario">
-            Salvar fornecedor
-          </button>
-          <p id="forn-message" class="msg"></p>
-
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Fornecedor</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="fornecedores-tbody">
-                <tr><td colspan="2">Nenhum fornecedor cadastrado.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <hr />
-
-        <!-- 6) Cadastro de itens por fornecedor -->
-        <section class="subsection">
-          <h3>Cadastro de itens por fornecedor</h3>
-
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="item-fornecedor">Fornecedor</label>
-              <select id="item-fornecedor">
-                <option value="">Selecione um fornecedor</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="item-descricao">Descrição do item</label>
-              <input
-                type="text"
-                id="item-descricao"
-                placeholder="Ex.: Amido de milho 25kg, Trigo 50kg..."
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="item-categoria">Categoria</label>
-              <select id="item-categoria">
-                <option value="">Selecione uma categoria</option>
-                <option value="Matéria-prima">Matéria-prima</option>
-                <option value="Embalagens">Embalagens</option>
-                <option value="Insumos de produção">Insumos de produção</option>
-                <option value="Despesas fixas">Despesas fixas</option>
-                <option value="Tributos">Tributos</option>
-                <option value="Outros">Outros</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="item-unidade">Unidade</label>
-              <input
-                type="text"
-                id="item-unidade"
-                placeholder="Ex.: kg, un, cx, saco..."
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="item-cod-barras">Código de barras</label>
-              <input
-                type="text"
-                id="item-cod-barras"
-                placeholder="Opcional"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="item-preco-padrao">Preço unitário padrão (R$)</label>
-              <input
-                type="number"
-                step="0.01"
-                id="item-preco-padrao"
-                placeholder="Opcional"
-              />
-            </div>
-          </div>
-
-          <button id="btn-save-item-despesa" class="btn-primario">
-            Salvar item
-          </button>
-          <p id="item-message" class="msg"></p>
-
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Fornecedor</th>
-                  <th>Item</th>
-                  <th>Categoria</th>
-                  <th>Unidade</th>
-                  <th>Cód. barras</th>
-                  <th>Preço padrão (R$)</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="itens-despesas-tbody">
-                <tr><td colspan="7">Nenhum item cadastrado.</td></tr>
-              </tbody>
-            </table>
           </div>
         </section>
 
@@ -893,6 +781,7 @@
                   <th>Data</th>
                   <th>Fornecedor</th>
                   <th>Descrição</th>
+                  <th>Categoria</th>
                   <th>Marca</th>
                   <th>Qtd</th>
                   <th>Valor unit. (R$)</th>
@@ -902,13 +791,195 @@
                 </tr>
               </thead>
               <tbody id="despesas-tbody">
-                <tr><td colspan="9">Nenhuma despesa lançada.</td></tr>
+                <tr><td colspan="10">Nenhuma despesa lançada.</td></tr>
               </tbody>
             </table>
           </div>
           <p class="totais-label">
             Total filtrado: <span id="despesas-total">R$ 0,00</span>
           </p>
+        </section>
+      </div>
+
+
+
+      <!-- Fornecedores -->
+      <div id="section-fornecedores" class="section hidden">
+        <h2>Fornecedores</h2>
+        <p class="muted">Cadastre fornecedores, categorias e itens. As despesas são lançadas na aba <strong>Despesas</strong>.</p>
+
+        <!-- Categorias de despesas -->
+        <section class="subsection">
+          <h3>Categorias de despesas</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="cat-nome">Nome da categoria</label>
+              <input type="text" id="cat-nome" placeholder="Ex.: Açúcar, Frete, Gás GLP" />
+            </div>
+
+            <div class="form-group">
+              <label for="cat-grupo">Grupo (KPI)</label>
+              <select id="cat-grupo">
+                <option value="">Selecione o grupo</option>
+                <option value="Matéria-prima">Matéria-prima</option>
+                <option value="Embalagens">Embalagens</option>
+                <option value="Insumos de produção">Insumos de produção</option>
+                <option value="Despesas fixas">Despesas fixas</option>
+                <option value="Combustível">Combustível</option>
+                <option value="Tributos">Tributos</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="cat-status">Status</label>
+              <select id="cat-status">
+                <option value="ativo">Ativa</option>
+                <option value="inativo">Arquivada</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="btn-save-categoria" class="btn-primario">Salvar categoria</button>
+          <button id="btn-cancel-categoria" class="btn-secundario hidden">Cancelar edição</button>
+          <p id="cat-message" class="msg"></p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Categoria</th>
+                  <th>Grupo</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="categorias-tbody">
+                <tr><td colspan="4">Nenhuma categoria cadastrada.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <hr />
+
+        <!-- 5) Cadastro de fornecedores -->
+        <section class="subsection">
+          <h3>Cadastro de fornecedores</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="forn-nome">Nome do fornecedor</label>
+              <input
+                type="text"
+                id="forn-nome"
+                placeholder="Ex.: Atacadão, Mercado X, Embalagens Y"
+              />
+            </div>
+          </div>
+          <button id="btn-save-fornecedor" class="btn-primario">
+            Salvar fornecedor
+          </button>
+          <button id="btn-cancel-fornecedor" class="btn-secundario hidden">Cancelar edição</button>
+          <p id="forn-message" class="msg"></p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="fornecedores-tbody">
+                <tr><td colspan="2">Nenhum fornecedor cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <hr />
+
+        <!-- 6) Cadastro de itens por fornecedor -->
+        <section class="subsection">
+          <h3>Cadastro de itens por fornecedor</h3>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="item-fornecedor">Fornecedor</label>
+              <select id="item-fornecedor">
+                <option value="">Selecione um fornecedor</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="item-descricao">Descrição do item</label>
+              <input
+                type="text"
+                id="item-descricao"
+                placeholder="Ex.: Amido de milho 25kg, Trigo 50kg..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="item-categoria">Categoria</label>
+              <select id="item-categoria">
+                <option value="">Selecione uma categoria</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="item-unidade">Unidade</label>
+              <input
+                type="text"
+                id="item-unidade"
+                placeholder="Ex.: kg, un, cx, saco..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="item-cod-barras">Código de barras</label>
+              <input
+                type="text"
+                id="item-cod-barras"
+                placeholder="Opcional"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="item-preco-padrao">Preço unitário padrão (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                id="item-preco-padrao"
+                placeholder="Opcional"
+              />
+            </div>
+          </div>
+
+          <button id="btn-save-item-despesa" class="btn-primario">
+            Salvar item
+          </button>
+          <button id="btn-cancel-item-despesa" class="btn-secundario hidden">Cancelar edição</button>
+          <p id="item-message" class="msg"></p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fornecedor</th>
+                  <th>Item</th>
+                  <th>Categoria</th>
+                  <th>Unidade</th>
+                  <th>Cód. barras</th>
+                  <th>Preço padrão (R$)</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="itens-despesas-tbody">
+                <tr><td colspan="7">Nenhum item cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
 
