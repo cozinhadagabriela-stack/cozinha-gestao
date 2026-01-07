@@ -15,6 +15,7 @@ const filterNfSelect = document.getElementById("filter-nf");
 // ====== GRÁFICOS (Chart.js) ======
 let chartFaturamentoMensal = null;
 let chartDistribuicaoProdutos = null;
+let chartTopClientes = null;
 
 // Plugin para desenhar linhas de chamada e rótulos percentuais no gráfico de pizza
 // (Distribuição de vendas por produto)
@@ -487,6 +488,7 @@ async function carregarUltimasVendas() {
       atualizarKPIsVazios();
       atualizarGraficoFaturamentoMensal([]);
       atualizarGraficoDistribuicaoProdutos({});
+      atualizarGraficoTopClientes({}, 0);
       return;
     }
 
@@ -498,6 +500,7 @@ async function carregarUltimasVendas() {
     atualizarKPIsVazios();
     atualizarGraficoFaturamentoMensal([]);
     atualizarGraficoDistribuicaoProdutos({});
+    atualizarGraficoTopClientes({}, 0);
   }
 }
 
@@ -1166,6 +1169,62 @@ function atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd) {
   }
 }
 
+// Barras (vertical) - Top 5 clientes por faturamento (obedece os filtros)
+function atualizarGraficoTopClientes(mapaClienteValor, totalValor) {
+  const canvas = document.getElementById("chart-top-clientes");
+  if (!canvas || typeof Chart === "undefined") return;
+
+  // Destroi gráfico anterior, se existir
+  if (chartTopClientes) {
+    chartTopClientes.destroy();
+    chartTopClientes = null;
+  }
+
+  const entries = Object.entries(mapaClienteValor || {})
+    .map(([nome, valor]) => [nome, Number(valor || 0)])
+    .filter(([, valor]) => valor > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  const labels = entries.map(([nome]) => nome);
+  const valores = entries.map(([, valor]) => valor);
+
+  if (!labels.length || !(Number(totalValor || 0) > 0)) {
+    const ctx = canvas.getContext("2d");
+    ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  chartTopClientes = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{ data: valores }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function (context) {
+              const v = Number(context.parsed?.y || 0);
+              const base = Number(totalValor || 0);
+              const perc = base > 0 ? (v / base) * 100 : 0;
+              return `${formatarMoedaBR(v)} (${formatarPercent(perc)})`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
 // ====== FILTROS EM MEMÓRIA / EXTRATO ======
 
 // Ordena das datas mais antigas para as mais novas
@@ -1222,6 +1281,7 @@ function renderizarVendasFiltradas() {
     atualizarKPIsVazios();
     atualizarGraficoFaturamentoMensal([]);
     atualizarGraficoDistribuicaoProdutos({});
+    atualizarGraficoTopClientes({}, 0);
     return;
   }
 
@@ -1407,6 +1467,7 @@ function renderizarVendasFiltradas() {
   // Atualiza os gráficos com base nas vendas filtradas
   atualizarGraficoFaturamentoMensal(vendasFiltradas);
   atualizarGraficoDistribuicaoProdutos(mapaProdutoQtd);
+  atualizarGraficoTopClientes(mapaClienteValor, totalValor);
 }
 
 async function excluirVenda(vendaId) {
